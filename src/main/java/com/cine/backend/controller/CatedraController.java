@@ -1,27 +1,27 @@
 package com.cine.backend.controller;
 
-import com.cine.backend.service.CatedraClientService;
+import com.cine.backend.service.CatedraClient;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/catedra")
 public class CatedraController {
 
-    private final CatedraClientService clientService;
+    private final CatedraClient catedraClient;
 
-    public CatedraController(CatedraClientService clientService) {
-        this.clientService = clientService;
+    public CatedraController(CatedraClient catedraClient) {
+        this.catedraClient = catedraClient;
     }
 
-    @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody Map<String, Object> payload) {
-        Map<String, Object> resp = clientService.register(payload);
-        if (resp == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "No response from cátedra"));
+    @GetMapping("/catedra/health")
+    public ResponseEntity<String> health() {
+        String result = catedraClient.pingBaseUrl();
+        if (result != null && result.startsWith("OK")) {
+            return ResponseEntity.ok(result);
+        } else {
+            // 502 Bad Gateway: el upstream no respondió correctamente
+            return ResponseEntity.status(502).body(result == null ? "ERROR" : result);
         }
-        return ResponseEntity.ok(resp);
     }
 }

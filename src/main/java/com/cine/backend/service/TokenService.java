@@ -16,13 +16,21 @@ public class TokenService {
         this.repo = repo;
     }
 
-    public ExternalToken saveToken(String token, String serviceName) {
+    /**
+     * Guarda token con fecha de emisión y expiración opcional.
+     */
+    public ExternalToken saveToken(String token, String serviceName, Instant expiresAt) {
         ExternalToken t = new ExternalToken();
         t.setToken(token);
         t.setIssuedAt(Instant.now());
+        t.setExpiresAt(expiresAt);
         t.setServiceName(serviceName);
-        // expiración no calculada por ahora
         return repo.save(t);
+    }
+
+    // Compatibilidad: mantiene el método antiguo si lo usás en otros sitios
+    public ExternalToken saveToken(String token, String serviceName) {
+        return saveToken(token, serviceName, null);
     }
 
     public Optional<ExternalToken> getLatestToken(String serviceName) {

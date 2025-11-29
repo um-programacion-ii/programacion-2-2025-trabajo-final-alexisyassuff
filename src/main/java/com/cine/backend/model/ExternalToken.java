@@ -1,26 +1,18 @@
 package com.cine.backend.model;
 
-import jakarta.persistence.*;
 import java.time.Instant;
 
-@Entity
-@Table(name = "external_tokens")
+/**
+ * POJO simple para la Etapa 1 — no usar JPA ni anotaciones.
+ */
 public class ExternalToken {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(columnDefinition = "TEXT")
     private String token;
-
     private Instant issuedAt;
-
     private Instant expiresAt;
-
     private String serviceName;
 
-    // Getters / setters (o usá Lombok si preferís)
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public String getToken() { return token; }
