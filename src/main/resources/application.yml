@@ -1,0 +1,13 @@
+spring:
+  main:
+    banner-mode: "off"
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+
+server:
+  port: 8080
+
+catedra:
+  base-url: "http://192.168.194.250:8080"
+  ping-on-startup: true
