@@ -2,6 +2,7 @@ package com.cine.proxy.kafka;
 
 import com.cine.proxy.model.Seat;
 import com.cine.proxy.service.RedisSeatService;
+import com.cine.proxy.service.MetricsService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -11,6 +12,14 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 
+/**
+ * Kafka consumer para el topic "eventos-asientos".
+ * Cambios principales:
+ * - usa seatService.upsertSeatWithTimestamp(...) para idempotencia/orden temporal
+ * - añade logs INFO y actualiza MetricsService counters
+ *
+ * Nota: el consumer quedará inactivo hasta que el broker esté accesible; la lógica está lista.
+ */
 @Component
 public class AsientosConsumer {
 
@@ -18,23 +27,24 @@ public class AsientosConsumer {
 
     private final ObjectMapper mapper;
     private final RedisSeatService seatService;
+    private final MetricsService metrics;
 
-    public AsientosConsumer(ObjectMapper mapper, RedisSeatService seatService) {
+    public AsientosConsumer(ObjectMapper mapper, RedisSeatService seatService, MetricsService metrics) {
         this.mapper = mapper;
         this.seatService = seatService;
+        this.metrics = metrics;
     }
 
-    // Topic correcto: "eventos-asientos"
     @KafkaListener(topics = "eventos-asientos", groupId = "proxy-asientos-group")
     public void onMessage(String message) {
+        metrics.incrementEventsReceived();
         try {
             JsonNode node = mapper.readTree(message);
 
-            // payload real: {"eventoId":123,"asientoId":"C3","estado":"BLOQUEADO","usuario":"test","timestamp":"2025-11-29T18:00:00Z"}
             String eventoId = node.path("eventoId").asText();
             String asientoId = node.path("asientoId").asText(null);
             String estado = node.path("estado").asText(null);
-            String usuario = node.path("usuario").isNull() ? null : node.path("usuario").asText(null);
+            String usuario = node.path("usuario").isNull() ? "" : node.path("usuario").asText("");
             String timestamp = node.path("timestamp").asText(null);
 
             if (eventoId == null || asientoId == null) {
@@ -42,21 +52,23 @@ public class AsientosConsumer {
                 return;
             }
 
-            Instant updatedAt = null;
+            Instant updatedAt;
             try {
-                if (timestamp != null && !timestamp.isBlank()) {
-                    updatedAt = Instant.parse(timestamp);
-                } else {
-                    updatedAt = Instant.now();
-                }
+                updatedAt = (timestamp != null && !timestamp.isBlank()) ? Instant.parse(timestamp) : Instant.now();
             } catch (Exception e) {
                 updatedAt = Instant.now();
             }
 
-            Seat seat = new Seat(asientoId, estado == null ? "DESCONOCIDO" : estado, usuario == null ? "" : usuario, updatedAt);
+            Seat seat = new Seat(asientoId, estado == null ? "DESCONOCIDO" : estado, usuario, updatedAt);
 
-            log.info("Procesando evento-asiento: eventoId={} asientoId={} estado={}", eventoId, asientoId, seat.getStatus());
-            seatService.upsertSeat(eventoId, seat);
+            log.info("Procesando evento-asiento (kafka): eventoId={} asientoId={} estado={} ts={}",
+                    eventoId, asientoId, seat.getStatus(), seat.getUpdatedAt());
+
+            // ---- APLICAMOS LA CORRECCIÓN: upsert con chequeo por timestamp ----
+            seatService.upsertSeatWithTimestamp(eventoId, seat);
+            // ------------------------------------------------------------------
+
+            metrics.incrementEventsProcessed();
         } catch (Exception e) {
             log.error("Error procesando mensaje Kafka de eventos-asientos", e);
         }
