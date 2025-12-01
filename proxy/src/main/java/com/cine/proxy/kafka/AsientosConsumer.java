@@ -13,12 +13,7 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 
 /**
- * Kafka consumer para el topic "eventos-asientos".
- * Cambios principales:
- * - usa seatService.upsertSeatWithTimestamp(...) para idempotencia/orden temporal
- * - añade logs INFO y actualiza MetricsService counters
- *
- * Nota: el consumer quedará inactivo hasta que el broker esté accesible; la lógica está lista.
+ * Kafka consumer para el topic configurado en application.yml (kafka.topic.eventos).
  */
 @Component
 public class AsientosConsumer {
@@ -35,13 +30,14 @@ public class AsientosConsumer {
         this.metrics = metrics;
     }
 
-    @KafkaListener(topics = "eventos-asientos", groupId = "proxy-asientos-group")
+    // lee el topic desde la propiedad kafka.topic.eventos y groupId desde kafka.group (con defaults)
+    @KafkaListener(topics = "${kafka.topic.eventos:eventos-asientos}", groupId = "${kafka.group:proxy-asientos-group}")
     public void onMessage(String message) {
         metrics.incrementEventsReceived();
         try {
             JsonNode node = mapper.readTree(message);
 
-            String eventoId = node.path("eventoId").asText();
+            String eventoId = node.path("eventoId").asText(null);
             String asientoId = node.path("asientoId").asText(null);
             String estado = node.path("estado").asText(null);
             String usuario = node.path("usuario").isNull() ? "" : node.path("usuario").asText("");
@@ -64,9 +60,8 @@ public class AsientosConsumer {
             log.info("Procesando evento-asiento (kafka): eventoId={} asientoId={} estado={} ts={}",
                     eventoId, asientoId, seat.getStatus(), seat.getUpdatedAt());
 
-            // ---- APLICAMOS LA CORRECCIÓN: upsert con chequeo por timestamp ----
+            // upsert con chequeo por timestamp (tu implementación)
             seatService.upsertSeatWithTimestamp(eventoId, seat);
-            // ------------------------------------------------------------------
 
             metrics.incrementEventsProcessed();
         } catch (Exception e) {

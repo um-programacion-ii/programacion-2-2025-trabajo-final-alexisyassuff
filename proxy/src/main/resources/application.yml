@@ -1,20 +1,23 @@
 catedra:
-  base-url: "http://192.168.194.250:8080" # REEMPLAZAR con la URL real de la cátedra
-  token: "" # opcional: JWT inicial si ya lo tenés
-  # refresh-url: "http://192.168.194.250:8080/auth/refresh" # opcional
-  # refresh-user: ""
-  # refresh-password: ""
+  base-url: "http://192.168.194.250:8080/api/endpoints/v1"
+  token: ""
   timeout-ms: 5000
 
+kafka:
+  topic:
+    eventos: "eventos-asientos"
+  group: proxy-asientos-group
+
 spring:
-  redis:
-    host: 192.168.194.250
-    port: 6379
   kafka:
     bootstrap-servers: 192.168.194.250:9092
     consumer:
       group-id: proxy-asientos-group
       auto-offset-reset: earliest
+
+  redis:
+    host: 192.168.194.250
+    port: 6379
 
 server:
   port: 8081
@@ -23,5 +26,3 @@ logging:
   level:
     org.springframework.data.redis: INFO
     org.springframework.kafka: INFO
-
-
