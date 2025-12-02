@@ -3,6 +3,7 @@ package com.cine.proxy.kafka;
 import com.cine.proxy.model.Seat;
 import com.cine.proxy.service.RedisSeatService;
 import com.cine.proxy.service.MetricsService;
+import com.cine.proxy.webhook.WebhookNotifier;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -14,6 +15,7 @@ import java.time.Instant;
 
 /**
  * Kafka consumer para el topic configurado en application.yml (kafka.topic.eventos).
+ * Ahora notifica al Backend vía WebhookNotifier luego de persistir/upsert en Redis.
  */
 @Component
 public class AsientosConsumer {
@@ -23,14 +25,15 @@ public class AsientosConsumer {
     private final ObjectMapper mapper;
     private final RedisSeatService seatService;
     private final MetricsService metrics;
+    private final WebhookNotifier webhookNotifier;
 
-    public AsientosConsumer(ObjectMapper mapper, RedisSeatService seatService, MetricsService metrics) {
+    public AsientosConsumer(ObjectMapper mapper, RedisSeatService seatService, MetricsService metrics, WebhookNotifier webhookNotifier) {
         this.mapper = mapper;
         this.seatService = seatService;
         this.metrics = metrics;
+        this.webhookNotifier = webhookNotifier;
     }
 
-    // lee el topic desde la propiedad kafka.topic.eventos y groupId desde kafka.group (con defaults)
     @KafkaListener(topics = "${kafka.topic.eventos:eventos-asientos}", groupId = "${kafka.group:proxy-asientos-group}")
     public void onMessage(String message) {
         metrics.incrementEventsReceived();
@@ -60,8 +63,15 @@ public class AsientosConsumer {
             log.info("Procesando evento-asiento (kafka): eventoId={} asientoId={} estado={} ts={}",
                     eventoId, asientoId, seat.getStatus(), seat.getUpdatedAt());
 
-            // upsert con chequeo por timestamp (tu implementación)
+            // Persistir con lógica de timestamp
             seatService.upsertSeatWithTimestamp(eventoId, seat);
+
+            // NOTIFICAR al backend (no bloqueante; errores logged)
+            try {
+                webhookNotifier.notifySeatChange(eventoId, seat);
+            } catch (Exception e) {
+                log.warn("Error al invocar WebhookNotifier (no crítico): {}", e.getMessage());
+            }
 
             metrics.incrementEventsProcessed();
         } catch (Exception e) {

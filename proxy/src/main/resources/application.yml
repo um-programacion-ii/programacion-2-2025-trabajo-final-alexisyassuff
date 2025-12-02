@@ -19,6 +19,11 @@ spring:
     host: 192.168.194.250
     port: 6379
 
+backend:
+  webhook:
+    url: "http://localhost:8089/internal/proxy/webhook"
+    timeout-ms: 2000
+
 server:
   port: 8081
 
