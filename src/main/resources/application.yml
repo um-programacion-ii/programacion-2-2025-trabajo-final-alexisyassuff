@@ -29,3 +29,6 @@ management:
   endpoint:
     health:
       show-details: "always"
+
+reconciliation:
+  fixedRateMs: 300000
