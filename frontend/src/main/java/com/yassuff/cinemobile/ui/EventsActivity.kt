@@ -109,6 +109,7 @@ fun EventsScreen(vm: EventsViewModel, onEventClick: (Long) -> Unit) {
                         }
                     }
                 }
+                
             }
             vm.error?.let { Text(text = it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(8.dp)) }
         }
