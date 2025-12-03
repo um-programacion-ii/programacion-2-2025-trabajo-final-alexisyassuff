@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.lifecycle.viewmodel.compose.viewModel
-
 class EventsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -109,7 +108,7 @@ fun EventsScreen(vm: EventsViewModel, onEventClick: (Long) -> Unit) {
                         }
                     }
                 }
-                
+
             }
             vm.error?.let { Text(text = it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(8.dp)) }
         }

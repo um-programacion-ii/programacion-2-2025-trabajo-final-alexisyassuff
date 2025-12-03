@@ -1,50 +1,57 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
-=======
-HELP.md
-target/
-.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
+# -----------------------------
+# Archivos de IDEs
+# -----------------------------
+# IntelliJ IDEA
+/.idea/
+/*.iml
+*.iws
+*.ipr
 
-### STS ###
-.apt_generated
+# Eclipse / STS
 .classpath
 .factorypath
 .project
-.settings
+.settings/
 .springBeans
+.apt_generated
 .sts4-cache
 
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
-
-### NetBeans ###
+# NetBeans
 /nbproject/private/
 /nbbuild/
 /dist/
 /nbdist/
 /.nb-gradle/
+
+# VS Code
+.vscode/
+
+# -----------------------------
+# Archivos de sistema
+# -----------------------------
+.DS_Store
+*.log
+
+# -----------------------------
+# Builds y dependencias temporales
+# -----------------------------
+# Gradle
+.gradle/
 build/
 !**/src/main/**/build/
 !**/src/test/**/build/
+captures/
+.externalNativeBuild/
+.cxx/
+local.properties
 
+# Maven
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
 
-### VS Code ###
-.vscode/
+# -----------------------------
+# Otros
+# -----------------------------
+HELP.md
