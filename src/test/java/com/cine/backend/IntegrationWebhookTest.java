@@ -41,7 +41,7 @@ public class IntegrationWebhookTest {
         // use HTTP client to POST /internal/proxy/webhook
         // then connect to redis and assert key exists
         try (Jedis j = new Jedis(redis.getHost(), redis.getFirstMappedPort())) {
-            // wait a little for app startup if needed
+            // wait a little for frontend startup if needed
             Thread.sleep(1000);
             // trigger the webhook into backend (HTTP client omitted; use RestTemplate)
             // For brevity, assume test code sends request; then:
