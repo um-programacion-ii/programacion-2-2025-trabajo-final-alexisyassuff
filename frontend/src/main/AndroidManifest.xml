@@ -40,6 +40,10 @@
             android:name=".MainActivity"
             android:exported="false" />
 
+        <!-- dentro de <application> -->
+        <activity android:name=".ui.EventsActivity" android:exported="false" />
+        <activity android:name=".ui.EventDetailActivity" android:exported="false" />
+
     </application>
 
 </manifest>

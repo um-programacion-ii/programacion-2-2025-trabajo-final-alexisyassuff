@@ -17,8 +17,8 @@ import java.util.concurrent.TimeUnit
 private val JSON = "application/json; charset=utf-8".toMediaType()
 
 // Para device con adb reverse use 127.0.0.1; para emulador 10.0.2.2
-private const val BASE_URL = "http://127.0.0.1:8080"
-private const val PROXY_BASE = "http://127.0.0.1:8081"
+private const val BASE_URL = "http://127.0.0.1:8080"   // backend principal (tokens, etc.)
+private const val PROXY_BASE = "http://127.0.0.1:8081" // proxy que sirve eventos/asientos
 
 private val client: OkHttpClient = OkHttpClient.Builder()
     .addInterceptor(AuthInterceptor()) // añade Authorization si SessionManager tiene token
@@ -32,7 +32,6 @@ suspend fun loginRequest(username: String, password: String): AuthResponse =
 object ApiClient {
     private fun encode(v: String) = URLEncoder.encode(v, StandardCharsets.UTF_8.toString())
 
-    // login debe usarse para obtener token; NO depende del interceptor
     suspend fun login(username: String, password: String): AuthResponse = withContext(Dispatchers.IO) {
         val url = "$BASE_URL/authenticate"
 
@@ -68,20 +67,24 @@ object ApiClient {
         }
     }
 
-    // Ejemplo: getEvents usa interceptor y recibiría 401 si token inválido
+    // getEvents ahora apunta al proxy en 8081 /eventos y maneja códigos HTTP
     suspend fun getEvents(): List<EventSummary> = withContext(Dispatchers.IO) {
         val req = Request.Builder()
-            .url("$BASE_URL/api/endpoints/v1/eventos-resumidos")
+            .url("$PROXY_BASE/eventos")
             .get()
             .addHeader("Accept", "application/json")
             .build()
         client.newCall(req).execute().use { resp ->
             val code = resp.code
-            val body = resp.body?.string() ?: "[]"
+            val body = resp.body?.string() ?: ""
             if (code == 401) {
-                // sesión inválida -> limpia token y notifica llamador
                 SessionManager.clear()
                 throw UnauthorizedException("Session expired")
+            }
+            if (code !in 200..299) {
+                // Si devuelve 204 (no content) devolvemos lista vacía
+                if (code == 204) return@withContext emptyList<EventSummary>()
+                throw Exception("getEvents failed: http=$code body=$body")
             }
             val arr = JSONArray(body)
             val list = mutableListOf<EventSummary>()
