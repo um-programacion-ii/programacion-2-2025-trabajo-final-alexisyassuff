@@ -1,0 +1,34 @@
+spring:
+  main:
+    banner-mode: "off"
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+
+  redis:
+    host: 192.168.194.250
+    port: 6379
+    ssl: false
+
+
+server:
+  port: 8080
+
+catedra:
+  base-url: "http://192.168.194.250:8080"
+  ping-on-startup: true
+
+proxy:
+  base-url: "http://localhost:8081"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,mappings
+  endpoint:
+    health:
+      show-details: "always"
+
+reconciliation:
+  fixedRateMs: 300000
