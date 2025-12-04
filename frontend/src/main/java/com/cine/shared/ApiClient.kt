@@ -116,18 +116,48 @@ object ApiClient {
         }
     }
 
+//    suspend fun getSeats(eventId: Long): List<Seat> = withContext(Dispatchers.IO) {
+//        val req = Request.Builder()
+//            .url("$PROXY_BASE/internal/kafka/events?eventoId=$eventId")
+//            .get()
+//            .addHeader("Accept", "application/json")
+//            .build()
+//        client.newCall(req).execute().use { resp ->
+//            val code = resp.code
+//            val body = resp.body?.string() ?: "[]"
+//            if (code == 401) {
+//                SessionManager.clear()
+//                throw UnauthorizedException("Session expired")
+//            }
+//            val arr = JSONArray(body)
+//            val list = mutableListOf<Seat>()
+//            for (i in 0 until arr.length()) {
+//                val o = arr.getJSONObject(i)
+//                val seatId = o.optString("seatId", o.optString("asientoId", "unknown"))
+//                val status = o.optString("status", o.optString("estado", "LIBRE"))
+//                val holder = if (o.has("holder")) o.optString("holder") else o.optString("usuario", null)
+//                val updatedAt = o.optString("updatedAt", null)
+//                list.add(Seat(seatId, status, holder, updatedAt))
+//            }
+//            return@withContext list
+//        }
+//    }
     suspend fun getSeats(eventId: Long): List<Seat> = withContext(Dispatchers.IO) {
         val req = Request.Builder()
-            .url("$PROXY_BASE/internal/kafka/events?eventoId=$eventId")
+            .url("$PROXY_BASE/asientos/$eventId")
             .get()
             .addHeader("Accept", "application/json")
+            .addHeader("X-Session-Id", sessionHeaderValue())
             .build()
         client.newCall(req).execute().use { resp ->
-            val code = resp.code
             val body = resp.body?.string() ?: "[]"
-            if (code == 401) {
+            if (resp.code == 401) {
                 SessionManager.clear()
                 throw UnauthorizedException("Session expired")
+            }
+            if (resp.code !in 200..299) {
+                if (resp.code == 204) return@withContext emptyList<Seat>()
+                throw Exception("getSeats failed: http=${resp.code} body=$body")
             }
             val arr = JSONArray(body)
             val list = mutableListOf<Seat>()
@@ -140,6 +170,72 @@ object ApiClient {
                 list.add(Seat(seatId, status, holder, updatedAt))
             }
             return@withContext list
+        }
+    }
+
+
+    // Helper to get session header value
+    private fun sessionHeaderValue(): String {
+        return SessionManager.getToken() ?: ""
+    }
+
+    suspend fun blockSeat(eventId: Long, seatId: String): Boolean = withContext(Dispatchers.IO) {
+        val url = "$PROXY_BASE/asientos/$eventId/$seatId/block"
+        val req = Request.Builder()
+            .url(url)
+            .post("{}".toRequestBody(JSON))
+            .addHeader("Accept", "application/json")
+            .addHeader("Content-Type", "application/json")
+            .addHeader("X-Session-Id", sessionHeaderValue())
+            .build()
+        client.newCall(req).execute().use { resp ->
+            val body = resp.body?.string() ?: ""
+            if (resp.code == 401) {
+                SessionManager.clear()
+                throw UnauthorizedException()
+            }
+            if (resp.code in 200..299) return@withContext true
+            throw Exception("blockSeat failed: http=${resp.code} body=$body")
+        }
+    }
+
+    suspend fun unlockSeat(eventId: Long, seatId: String): Boolean = withContext(Dispatchers.IO) {
+        val url = "$PROXY_BASE/asientos/$eventId/$seatId/unlock"
+        val req = Request.Builder()
+            .url(url)
+            .post("{}".toRequestBody(JSON))
+            .addHeader("Accept", "application/json")
+            .addHeader("Content-Type", "application/json")
+            .addHeader("X-Session-Id", sessionHeaderValue())
+            .build()
+        client.newCall(req).execute().use { resp ->
+            val body = resp.body?.string() ?: ""
+            if (resp.code == 401) {
+                SessionManager.clear()
+                throw UnauthorizedException()
+            }
+            if (resp.code in 200..299) return@withContext true
+            throw Exception("unlockSeat failed: http=${resp.code} body=$body")
+        }
+    }
+
+    suspend fun purchaseSeat(eventId: Long, seatId: String): Boolean = withContext(Dispatchers.IO) {
+        val url = "$PROXY_BASE/asientos/$eventId/$seatId/purchase"
+        val req = Request.Builder()
+            .url(url)
+            .post("{}".toRequestBody(JSON))
+            .addHeader("Accept", "application/json")
+            .addHeader("Content-Type", "application/json")
+            .addHeader("X-Session-Id", sessionHeaderValue())
+            .build()
+        client.newCall(req).execute().use { resp ->
+            val body = resp.body?.string() ?: ""
+            if (resp.code == 401) {
+                SessionManager.clear()
+                throw UnauthorizedException()
+            }
+            if (resp.code in 200..299) return@withContext true
+            throw Exception("purchaseSeat failed: http=${resp.code} body=$body")
         }
     }
 }
