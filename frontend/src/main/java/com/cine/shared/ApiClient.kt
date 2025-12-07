@@ -181,12 +181,14 @@ object ApiClient {
 
     suspend fun blockSeat(eventId: Long, seatId: String): Boolean = withContext(Dispatchers.IO) {
         val url = "$PROXY_BASE/asientos/$eventId/$seatId/block"
+        val sessionId = sessionHeaderValue()
+        println("DEBUG: blockSeat URL=$url, sessionId='$sessionId'")
         val req = Request.Builder()
             .url(url)
             .post("{}".toRequestBody(JSON))
             .addHeader("Accept", "application/json")
             .addHeader("Content-Type", "application/json")
-            .addHeader("X-Session-Id", sessionHeaderValue())
+            .addHeader("X-Session-Id", sessionId)
             .build()
         client.newCall(req).execute().use { resp ->
             val body = resp.body?.string() ?: ""
