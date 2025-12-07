@@ -1,6 +1,5 @@
 package com.cine.shared
 
-import android.util.Log
 import com.yassuff.cinemobile.network.AuthInterceptor
 import com.yassuff.cinemobile.network.UnauthorizedException
 import kotlinx.coroutines.Dispatchers
@@ -68,10 +67,10 @@ object ApiClient {
         }
     }
 
-    // getEvents ahora apunta al proxy en 8081 /eventos y maneja códigos HTTP
+    // getEvents ahora apunta al proxy en 8081 con endpoints exactos del enunciado
     suspend fun getEvents(): List<EventSummary> = withContext(Dispatchers.IO) {
         val req = Request.Builder()
-            .url("$PROXY_BASE/eventos")
+            .url("$PROXY_BASE/api/endpoints/v1/eventos")
             .get()
             .addHeader("Accept", "application/json")
             .build()
@@ -106,27 +105,12 @@ object ApiClient {
                     o.has("fecha") -> o.optString("fecha")
                     else -> ""
                 }
-                // Calcular disponibles consultando el proxy en tiempo real
-                val available = try {
-                    when {
-                        o.has("availableSeats") -> o.optInt("availableSeats")
-                        o.has("disponibles") -> o.optInt("disponibles") 
-                        else -> {
-                            // Consultar estado real de asientos desde el proxy
-                            getAvailableSeatsFromProxy(id)
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.w("ApiClient", "Error calculando disponibles para evento $id: ${e.message}")
-                    0
+                val available = when {
+                    o.has("availableSeats") -> o.optInt("availableSeats")
+                    o.has("disponibles") -> o.optInt("disponibles")
+                    else -> 0
                 }
-                val price = when {
-                    o.has("price") -> o.optDouble("price")
-                    o.has("precio") -> o.optDouble("precio")
-                    o.has("precioEntrada") -> o.optDouble("precioEntrada")
-                    else -> 1000.0
-                }
-                list.add(EventSummary(id, title, dateTime, available, price))
+                list.add(EventSummary(id, title, dateTime, available))
             }
             return@withContext list
         }
@@ -254,47 +238,6 @@ object ApiClient {
             }
             if (resp.code in 200..299) return@withContext true
             throw Exception("purchaseSeat failed: http=${resp.code} body=$body")
-        }
-    }
-
-    /**
-     * Consulta el estado real de los asientos desde el proxy para calcular disponibles
-     */
-    private suspend fun getAvailableSeatsFromProxy(eventId: Long): Int = withContext(Dispatchers.IO) {
-        return@withContext try {
-            val url = "$PROXY_BASE/asientos/$eventId"
-            val req = Request.Builder()
-                .url(url)
-                .get()
-                .addHeader("Accept", "application/json")
-                .build()
-            
-            client.newCall(req).execute().use { resp ->
-                if (resp.code in 200..299) {
-                    val body = resp.body?.string() ?: "[]"
-                    val seatsArray = JSONArray(body)
-                    var availableCount = 0
-                    
-                    for (i in 0 until seatsArray.length()) {
-                        val seat = seatsArray.getJSONObject(i)
-                        val status = seat.optString("status", "")
-                        
-                        // Contar como disponible si está LIBRE
-                        if (status.equals("LIBRE", ignoreCase = true)) {
-                            availableCount++
-                        }
-                    }
-                    
-                    Log.d("ApiClient", "Evento $eventId: $availableCount asientos disponibles de ${seatsArray.length()} totales")
-                    availableCount
-                } else {
-                    Log.w("ApiClient", "Error consultando asientos del proxy: http=${resp.code}")
-                    0
-                }
-            }
-        } catch (e: Exception) {
-            Log.w("ApiClient", "Error obteniendo asientos del proxy para evento $eventId: ${e.message}")
-            0
         }
     }
 }

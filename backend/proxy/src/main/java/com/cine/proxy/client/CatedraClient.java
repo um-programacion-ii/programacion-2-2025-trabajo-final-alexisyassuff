@@ -34,6 +34,8 @@ public class CatedraClient {
 
     public String listEventos() { return executeGet("/eventos"); }
     public String getEvento(String id) { return executeGet("/evento/" + id); }
+    public String listarVentas() { return executeGet("/listar-ventas"); }
+    public String listarVenta(String id) { return executeGet("/listar-venta/" + id); }
 
     private String executeGet(String path) {
         WebClient client = buildClient();

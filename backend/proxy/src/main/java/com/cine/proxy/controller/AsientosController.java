@@ -108,6 +108,8 @@ public class AsientosController {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
             }
             
+            log.info("Intentando bloquear asiento {} evento {} con sessionId: {}", seatId, eventoId, sessionId);
+            
             // PASO 1: Bloquear localmente (para demo inmediata)
             SeatLockService.BlockResult res = seatLockService.tryBlock(eventoId, seatId, sessionId);
             
@@ -129,7 +131,7 @@ public class AsientosController {
                             payload.put("asientos", List.of(filaColumna));
                             
                             String jsonPayload = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(payload);
-                            String catedraResponse = catedraClient.executePost("/api/endpoints/v1/bloquear-asientos", jsonPayload);
+                            String catedraResponse = catedraClient.executePost("/bloquear-asientos", jsonPayload);
                             log.info("También enviado a cátedra: {}", catedraResponse);
                         }
                     } catch (Exception ex) {
@@ -175,8 +177,49 @@ public class AsientosController {
                 resp.put("error", "Missing X-Session-Id");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
             }
-            boolean ok = seatLockService.unlockIfOwner(eventoId, seatId, sessionId);
-            if (ok) {
+            
+            log.info("Intentando desbloquear asiento {} evento {} con sessionId: {}", seatId, eventoId, sessionId);
+            
+            // Verificar también en Redis para asegurar consistencia
+            boolean canUnlock = false;
+            try {
+                List<Seat> allSeats = seatService.getSeatsForEvento(String.valueOf(eventoId));
+                Seat currentSeat = allSeats.stream()
+                    .filter(s -> seatId.equals(s.getSeatId()))
+                    .findFirst()
+                    .orElse(null);
+                
+                if (currentSeat != null) {
+                    log.info("Estado actual en Redis - seatId: {}, status: {}, holder: {}", 
+                            currentSeat.getSeatId(), currentSeat.getStatus(), currentSeat.getHolder());
+                    // Puede desbloquear si es el propietario o si está libre
+                    canUnlock = sessionId.equals(currentSeat.getHolder()) || 
+                               "LIBRE".equals(currentSeat.getStatus());
+                } else {
+                    // Si no existe en Redis, permitir desbloqueo (asiento libre por defecto)
+                    canUnlock = true;
+                    log.info("Asiento no encontrado en Redis, permitiendo desbloqueo");
+                }
+            } catch (Exception ex) {
+                log.warn("Error verificando Redis, usando SeatLockService: {}", ex.getMessage());
+                canUnlock = seatLockService.unlockIfOwner(eventoId, seatId, sessionId);
+            }
+            
+            // También intentar desbloqueo en memoria
+            boolean memoryUnlock = seatLockService.unlockIfOwner(eventoId, seatId, sessionId);
+            log.info("Resultado desbloqueo - Redis: {}, Memoria: {}", canUnlock, memoryUnlock);
+            
+            if (canUnlock || memoryUnlock) {
+                // También actualizar Redis para persistir el desbloqueo
+                try {
+                    Seat unlockedSeat = new Seat(seatId, "LIBRE", null, java.time.Instant.now());
+                    seatService.upsertSeatWithTimestamp(String.valueOf(eventoId), unlockedSeat);
+                    log.info("Asiento {} desbloqueado y actualizado en Redis", seatId);
+                } catch (Exception ex) {
+                    log.warn("Error actualizando Redis al desbloquear: {}", ex.getMessage());
+                    // NO fallar - el desbloqueo local ya funcionó
+                }
+                
                 Map<String,Object> r = new HashMap<>();
                 r.put("result", "unlocked");
                 return ResponseEntity.ok(r);
@@ -187,6 +230,136 @@ public class AsientosController {
             }
         } catch (Exception ex) {
             log.error("Error unlockSeat: {}", ex.getMessage(), ex);
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "internal");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);
+        }
+    }
+
+    /**
+     * POST /asientos/{eventoId}/initialize - INICIALIZAR MATRIZ DE ASIENTOS
+     * Crea la matriz completa de asientos basándose en los datos del evento de la cátedra
+     */
+    @PostMapping("/{eventoId}/initialize")
+    public ResponseEntity<?> initializeSeats(@PathVariable String eventoId) {
+        try {
+            // 1. Obtener datos del evento de la cátedra
+            String eventData = catedraClient.getEvento(eventoId);
+            com.fasterxml.jackson.databind.JsonNode eventNode = new com.fasterxml.jackson.databind.ObjectMapper().readTree(eventData);
+            
+            int filas = eventNode.path("filaAsientos").asInt(0);
+            int columnas = eventNode.path("columnAsientos").asInt(0);
+            
+            if (filas == 0 || columnas == 0) {
+                Map<String, Object> err = new HashMap<>();
+                err.put("error", "Evento no tiene dimensiones válidas de asientos");
+                return ResponseEntity.badRequest().body(err);
+            }
+            
+            // 2. Generar matriz completa de asientos LIBRES
+            List<Seat> seats = new ArrayList<>();
+            for (int fila = 1; fila <= filas; fila++) {
+                for (int columna = 1; columna <= columnas; columna++) {
+                    String seatId = "r" + fila + "c" + columna;
+                    Seat seat = new Seat(seatId, "LIBRE", null, java.time.Instant.now());
+                    seats.add(seat);
+                }
+            }
+            
+            // 3. Guardar todos los asientos en Redis
+            for (Seat seat : seats) {
+                seatService.upsertSeatWithTimestamp(eventoId, seat);
+            }
+            
+            log.info("Inicializados {} asientos para evento {} ({}x{})", seats.size(), eventoId, filas, columnas);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("result", "initialized");
+            response.put("eventoId", eventoId);
+            response.put("totalSeats", seats.size());
+            response.put("dimensions", filas + "x" + columnas);
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception ex) {
+            log.error("Error inicializando asientos para evento {}: {}", eventoId, ex.getMessage(), ex);
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "Error inicializando: " + ex.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);
+        }
+    }
+
+    /**
+     * GET /asientos/{eventoId}/debug - DIAGNOSTICO DE ORIGEN DE DATOS
+     * Te dice de dónde vienen los asientos para explicarle al profesor
+     */
+    @GetMapping("/{eventoId}/debug")
+    public ResponseEntity<?> debugAsientos(@PathVariable String eventoId) {
+        try {
+            Map<String, Object> diagnostico = new HashMap<>();
+            List<Seat> seats = seatService.getSeatsForEvento(eventoId);
+            
+            diagnostico.put("total_asientos", seats.size());
+            diagnostico.put("origen_explicacion", "Datos vienen de Redis, que se populan via:");
+            diagnostico.put("fuentes_posibles", List.of(
+                "1. Kafka Consumer (AsientosConsumer) - eventos de cátedra",
+                "2. Tests E2E ejecutados (BackendProxyE2ETest.java)",
+                "3. Acciones de otros estudiantes en Redis compartido",
+                "4. Tu propio bloqueo/compra desde la app"
+            ));
+            
+            Map<String, Object> detalles = new HashMap<>();
+            for (Seat s : seats) {
+                Map<String, Object> info = new HashMap<>();
+                info.put("status", s.getStatus());
+                info.put("holder", s.getHolder());
+                info.put("updatedAt", s.getUpdatedAt());
+                
+                // Analizar origen probable
+                if ("aluX".equals(s.getHolder()) && s.getSeatId().equals("r2cX")) {
+                    info.put("origen_probable", "Test E2E (BackendProxyE2ETest.java línea 95-98)");
+                } else if (s.getHolder() != null && s.getHolder().startsWith("alu")) {
+                    info.put("origen_probable", "Datos de prueba de cátedra o test");
+                } else if (s.getHolder() != null && s.getHolder().contains("dev-token")) {
+                    info.put("origen_probable", "Tu sesión desde la app Android");
+                } else {
+                    info.put("origen_probable", "Kafka o acción de otro estudiante");
+                }
+                
+                detalles.put(s.getSeatId(), info);
+            }
+            diagnostico.put("asientos_detalle", detalles);
+            
+            return ResponseEntity.ok(diagnostico);
+        } catch (Exception ex) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "Error diagnosticando: " + ex.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);
+        }
+    }
+
+    /**
+     * POST /asientos/{eventoId}/{seatId}/free - ADMIN ENDPOINT FOR TESTING
+     * Forces a seat to be FREE (libera cualquier asiento para testing)
+     */
+    @PostMapping("/{eventoId}/{seatId}/free")
+    public ResponseEntity<?> freeSeat(@PathVariable int eventoId, @PathVariable String seatId) {
+        try {
+            // Forzar el asiento a LIBRE en Redis
+            Seat freeSeat = new Seat(seatId, "LIBRE", null, java.time.Instant.now());
+            seatService.upsertSeatWithTimestamp(String.valueOf(eventoId), freeSeat);
+            
+            // También liberar en memoria (forzado - cualquier session)
+            seatLockService.unlockIfOwner(eventoId, seatId, "ADMIN-FORCE-UNLOCK");
+            
+            log.info("ADMIN: Asiento {} del evento {} forzado a LIBRE", seatId, eventoId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("result", "freed");
+            response.put("seatId", seatId);
+            response.put("eventoId", eventoId);
+            return ResponseEntity.ok(response);
+        } catch (Exception ex) {
+            log.error("Error liberando asiento {}: {}", seatId, ex.getMessage(), ex);
             Map<String, Object> err = new HashMap<>();
             err.put("error", "internal");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);

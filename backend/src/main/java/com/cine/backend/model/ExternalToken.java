@@ -2,9 +2,7 @@ package com.cine.backend.model;
 
 import java.time.Instant;
 
-/**
- * POJO simple para la Etapa 1 — no usar JPA ni anotaciones.
- */
+
 public class ExternalToken {
 
     private Long id;
