@@ -6,7 +6,8 @@ data class EventSummary(
     val id: Long,
     val title: String,
     val dateTime: String,
-    val availableSeats: Int = 0
+    val availableSeats: Int = 0,
+    val price: Double = 0.0
 )
 
 data class Seat(

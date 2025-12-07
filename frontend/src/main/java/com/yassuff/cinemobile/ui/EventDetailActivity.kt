@@ -28,6 +28,8 @@ import com.cine.shared.SessionManager
 import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.rememberCoroutineScope
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 class EventDetailActivity : ComponentActivity() {
@@ -167,7 +169,7 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                         Column {
                             Text(text = "Estado: ${s.status}")
                             if (!s.holder.isNullOrBlank()) Text(text = "Usuario: ${s.holder}")
-                            if (!s.updatedAt.isNullOrBlank()) Text(text = "Última actualización: ${s.updatedAt}")
+                            if (!s.updatedAt.isNullOrBlank()) Text(text = "Última actualización: ${formatDateTime(s.updatedAt!!)}")
                             Spacer(modifier = Modifier.height(8.dp))
                             if (performingAction) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -309,4 +311,25 @@ private fun seatStatusColor(status: String?): Color {
 private fun isDarkTextNeeded(bg: Color): Boolean {
     val luminance = (0.299 * bg.red + 0.587 * bg.green + 0.114 * bg.blue)
     return luminance > 0.6
+}
+
+private fun formatDateTime(dateTimeStr: String): String {
+    return try {
+        // Intentar parsear diferentes formatos de fecha ISO
+        val inputFormat = when {
+            dateTimeStr.contains("T") && dateTimeStr.contains("Z") -> 
+                SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.getDefault()).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }
+            dateTimeStr.contains("T") -> SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+            dateTimeStr.contains("-") -> SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+            else -> return dateTimeStr
+        }
+        
+        val outputFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+        val date = inputFormat.parse(dateTimeStr)
+        date?.let { outputFormat.format(it) } ?: dateTimeStr
+    } catch (e: Exception) {
+        dateTimeStr // Si hay error, devolver fecha original
+    }
 }

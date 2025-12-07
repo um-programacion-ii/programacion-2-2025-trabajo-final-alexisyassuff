@@ -19,6 +19,8 @@ import com.cine.shared.ApiClient
 import com.cine.shared.EventSummary
 import com.cine.shared.SessionManager
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -126,10 +128,28 @@ private fun EventCard(e: EventSummary, onClick: () -> Unit) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(text = e.title, style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(4.dp))
-            Text(text = e.dateTime, style = MaterialTheme.typography.bodySmall)
+            Text(text = formatDateTime(e.dateTime), style = MaterialTheme.typography.bodySmall)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = "Precio: $${String.format("%.2f", e.price)}", style = MaterialTheme.typography.bodySmall)
             Spacer(modifier = Modifier.height(6.dp))
-            // Ajusta el nombre del campo si tu modelo usa otra propiedad
             Text(text = "Disponibles: ${e.availableSeats}")
         }
+    }
+}
+
+private fun formatDateTime(dateTimeStr: String): String {
+    return try {
+        // Intentar parsear diferentes formatos de fecha
+        val inputFormat = when {
+            dateTimeStr.contains("T") -> SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+            dateTimeStr.contains("-") -> SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+            else -> return dateTimeStr // Si no coincide con ningún formato, devolver original
+        }
+        
+        val outputFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+        val date = inputFormat.parse(dateTimeStr)
+        date?.let { outputFormat.format(it) } ?: dateTimeStr
+    } catch (e: Exception) {
+        dateTimeStr // Si hay error, devolver fecha original
     }
 }
