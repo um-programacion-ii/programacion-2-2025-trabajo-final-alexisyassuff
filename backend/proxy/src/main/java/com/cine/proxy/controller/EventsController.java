@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * Controller implementing BOTH the enunciado endpoints AND frontend compatibility:
@@ -59,25 +60,7 @@ public class EventsController {
             // 1. Obtener datos del evento
             String eventoData = client.getEvento(id);
             
-            // 2. Verificar si necesita inicializar asientos
-            try {
-                // Intentar obtener asientos para ver si ya están inicializados
-                java.util.List<com.cine.proxy.model.Seat> seats = seatService.getSeatsForEvento(id);
-                
-                if (seats.isEmpty()) {
-                    // No hay asientos - auto-inicializar
-                    initializeSeatsForEvent(id, eventoData);
-                    log.info("Auto-inicializados asientos para evento {}", id);
-                }
-            } catch (Exception seatEx) {
-                // Error obteniendo asientos - intentar inicializar
-                try {
-                    initializeSeatsForEvent(id, eventoData);
-                    log.info("Auto-inicializados asientos (después de error) para evento {}", id);
-                } catch (Exception initEx) {
-                    log.warn("No se pudieron auto-inicializar asientos para evento {}: {}", id, initEx.getMessage());
-                }
-            }
+            // Redis ya está poblado - solo devolver los datos del evento
             
             return ResponseEntity.ok(eventoData);
             
@@ -94,21 +77,7 @@ public class EventsController {
     @GetMapping("/api/endpoints/v1/evento/{id}/asientos")
     public ResponseEntity<?> getAsientosEnunciado(@PathVariable String id) {
         try {
-            // 1. Asegurar que el evento existe y tiene asientos inicializados
-            try {
-                String eventoData = client.getEvento(id);
-                java.util.List<com.cine.proxy.model.Seat> seats = seatService.getSeatsForEvento(id);
-                
-                if (seats.isEmpty()) {
-                    // Auto-inicializar si no existen
-                    initializeSeatsForEvent(id, eventoData);
-                    seats = seatService.getSeatsForEvento(id);
-                }
-            } catch (Exception ex) {
-                log.error("Error inicializando asientos para evento {}: {}", id, ex.getMessage(), ex);
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("{\"error\": \"Error inicializando asientos: " + ex.getMessage() + "\"}");
-            }
+            // Redis ya está poblado - solo leer asientos existentes
             
             // 2. Obtener todos los asientos del evento
             java.util.List<com.cine.proxy.model.Seat> seats = seatService.getSeatsForEvento(id);
@@ -126,30 +95,7 @@ public class EventsController {
      * Método auxiliar para inicializar asientos basándose en datos del evento
      * SOLO se ejecuta si la cátedra NO tiene asientos para este evento
      */
-    private void initializeSeatsForEvent(String eventoId, String eventoData) throws Exception {
-        com.fasterxml.jackson.databind.JsonNode eventNode = new com.fasterxml.jackson.databind.ObjectMapper().readTree(eventoData);
-        
-        int filas = eventNode.path("filaAsientos").asInt(0);
-        int columnas = eventNode.path("columnAsientos").asInt(0);
-        
-        if (filas > 0 && columnas > 0) {
-            log.info("Evento {} no tiene asientos en la cátedra. Inicializando matriz {}x{} = {} asientos", 
-                    eventoId, filas, columnas, (filas * columnas));
-                    
-            // Generar matriz completa de asientos LIBRES basada en las dimensiones del evento
-            for (int fila = 1; fila <= filas; fila++) {
-                for (int columna = 1; columna <= columnas; columna++) {
-                    String seatId = "r" + fila + "c" + columna;
-                    com.cine.proxy.model.Seat seat = new com.cine.proxy.model.Seat(seatId, "LIBRE", null, java.time.Instant.now());
-                    seatService.upsertSeatWithTimestamp(eventoId, seat);
-                }
-            }
-            
-            log.info("Inicializados {} asientos para evento {}", (filas * columnas), eventoId);
-        } else {
-            log.warn("Evento {} no tiene dimensiones válidas de asientos: filas={}, columnas={}", eventoId, filas, columnas);
-        }
-    }
+
     
     // ===== FRONTEND COMPATIBILITY ENDPOINTS =====
     
@@ -172,21 +118,7 @@ public class EventsController {
     @GetMapping("/eventos/{id}/asientos")
     public ResponseEntity<?> getAsientosFrontend(@PathVariable String id) {
         try {
-            // 1. Asegurar que el evento existe y tiene asientos inicializados
-            try {
-                String eventoData = client.getEvento(id);
-                java.util.List<com.cine.proxy.model.Seat> seats = seatService.getSeatsForEvento(id);
-                
-                if (seats.isEmpty()) {
-                    // Auto-inicializar si no existen
-                    initializeSeatsForEvent(id, eventoData);
-                    seats = seatService.getSeatsForEvento(id);
-                }
-            } catch (Exception ex) {
-                log.error("Error inicializando asientos para evento {}: {}", id, ex.getMessage(), ex);
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("{\"error\": \"Error inicializando asientos: " + ex.getMessage() + "\"}");
-            }
+            // Redis ya está poblado - solo leer asientos existentes
             
             // 2. Obtener todos los asientos del evento
             java.util.List<com.cine.proxy.model.Seat> seats = seatService.getSeatsForEvento(id);
@@ -256,6 +188,8 @@ public class EventsController {
         }
     }
 
+
+
     /**
      * POST /api/endpoints/v1/bloquear-asientos
      * Expected body: { "eventoId": <id>, "asientos": [ { "fila":.., "columna":.. }, ... ] }
@@ -314,12 +248,88 @@ public class EventsController {
     /**
      * GET /api/endpoints/v1/listar-ventas
      * Returns list of all sales (successful and failed) for the student
+     * Combines data from cátedra (rejected sales) + Redis (successful sales)
      */
     @GetMapping("/api/endpoints/v1/listar-ventas")
     public ResponseEntity<?> listarVentas() {
         try {
-            String resp = client.listarVentas();
-            return ResponseEntity.ok().body(resp);
+            // 1. Obtener ventas rechazadas de la cátedra
+            String catedraResp = client.listarVentas();
+            
+            // 2. Obtener asientos vendidos desde Redis para EVENTO 1 Y EVENTO 2
+            java.util.List<com.cine.proxy.model.Seat> allSoldSeats = new java.util.ArrayList<>();
+            
+            // Evento 1
+            java.util.List<com.cine.proxy.model.Seat> soldSeatsEvento1 = seatService.getSeatsForEvento("1")
+                .stream()
+                .filter(seat -> "VENDIDO".equals(seat.getStatus()))
+                .collect(java.util.stream.Collectors.toList());
+            allSoldSeats.addAll(soldSeatsEvento1);
+            
+            // Evento 2  
+            java.util.List<com.cine.proxy.model.Seat> soldSeatsEvento2 = seatService.getSeatsForEvento("2")
+                .stream()
+                .filter(seat -> "VENDIDO".equals(seat.getStatus()))
+                .collect(java.util.stream.Collectors.toList());
+            allSoldSeats.addAll(soldSeatsEvento2);
+            
+            // 3. Parsear respuesta de cátedra
+            com.fasterxml.jackson.databind.JsonNode catedraNode = mapper.readTree(catedraResp);
+            java.util.List<Map<String, Object>> allSales = new java.util.ArrayList<>();
+            
+            // 4. Agregar ventas rechazadas de cátedra
+            if (catedraNode.isArray()) {
+                for (com.fasterxml.jackson.databind.JsonNode sale : catedraNode) {
+                    Map<String, Object> saleMap = new java.util.HashMap<>();
+                    saleMap.put("eventoId", sale.path("eventoId").asInt());
+                    saleMap.put("ventaId", sale.path("ventaId").asInt());
+                    saleMap.put("fechaVenta", sale.path("fechaVenta").asText());
+                    saleMap.put("resultado", false);
+                    saleMap.put("descripcion", sale.path("descripcion").asText());
+                    saleMap.put("precioVenta", sale.path("precioVenta").asDouble());
+                    saleMap.put("cantidadAsientos", sale.path("cantidadAsientos").asInt());
+                    allSales.add(saleMap);
+                }
+            }
+            
+            // 5. Agregar ventas exitosas desde Redis - EVENTO 1
+            for (com.cine.proxy.model.Seat seat : soldSeatsEvento1) {
+                Map<String, Object> successSale = new java.util.HashMap<>();
+                successSale.put("eventoId", 1);
+                successSale.put("ventaId", 0); // Sin número para evitar confusión
+                successSale.put("fechaVenta", seat.getUpdatedAt().toString());
+                successSale.put("resultado", true);
+                successSale.put("descripcion", "Venta realizada con éxito");
+                successSale.put("precioVenta", 2690.03); // Precio evento 1
+                successSale.put("cantidadAsientos", 1);
+                successSale.put("asiento", seat.getSeatId());
+                successSale.put("holder", seat.getHolder());
+                allSales.add(successSale);
+            }
+            
+            // 6. Agregar ventas exitosas desde Redis - EVENTO 2
+            for (com.cine.proxy.model.Seat seat : soldSeatsEvento2) {
+                Map<String, Object> successSale = new java.util.HashMap<>();
+                successSale.put("eventoId", 2);
+                successSale.put("ventaId", 0); // Sin número para evitar confusión
+                successSale.put("fechaVenta", seat.getUpdatedAt().toString());
+                successSale.put("resultado", true);
+                successSale.put("descripcion", "Venta realizada con éxito");
+                successSale.put("precioVenta", 4522.87); // Precio evento 2
+                successSale.put("cantidadAsientos", 1);
+                successSale.put("asiento", seat.getSeatId());
+                successSale.put("holder", seat.getHolder());
+                allSales.add(successSale);
+            }
+            
+            // 7. ORDENAR POR FECHA MÁS RECIENTE PRIMERO
+            allSales.sort((a, b) -> {
+                String fechaA = (String) a.get("fechaVenta");
+                String fechaB = (String) b.get("fechaVenta");
+                return fechaB.compareTo(fechaA); // Orden descendente (más reciente primero)
+            });
+            
+            return ResponseEntity.ok().body(allSales);
         } catch (CatedraException ex) {
             throw ex;
         } catch (Exception e) {
@@ -344,4 +354,5 @@ public class EventsController {
             return ResponseEntity.status(502).body("Error inesperado en el proxy");
         }
     }
+
 }

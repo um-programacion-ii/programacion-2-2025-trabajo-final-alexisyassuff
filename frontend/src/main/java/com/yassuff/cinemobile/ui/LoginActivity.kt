@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -76,7 +77,12 @@ fun LoginScreen(vm: LoginViewModel, onLoginSuccess: (Boolean) -> Unit) {
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedTextField(value = user, onValueChange = { user = it }, label = { Text("Usuario") })
             Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(value = pass, onValueChange = { pass = it }, label = { Text("Contraseña") })
+            OutlinedTextField(
+                value = pass, 
+                onValueChange = { pass = it }, 
+                label = { Text("Contraseña") },
+                visualTransformation = PasswordVisualTransformation()
+            )
             Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = { vm.login(user.trim(), pass.trim(), onLoginSuccess) }, enabled = !vm.loading) {
                 Text(if (vm.loading) "Ingresando..." else "Ingresar")

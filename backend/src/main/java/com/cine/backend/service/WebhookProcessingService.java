@@ -35,6 +35,7 @@ public class WebhookProcessingService {
         String seatId = payload.get("seatId").toString();
         String updatedAt = payload.getOrDefault("updatedAt", Instant.now().toString()).toString();
 
+        // Mantener el comportamiento original: solo escribir clave de idempotencia
         String key = "backend:proxy:webhook:" + eventoId + ":" + seatId;
         String valueStr = updatedAt;
 
