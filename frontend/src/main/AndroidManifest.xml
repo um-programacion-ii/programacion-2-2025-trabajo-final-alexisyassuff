@@ -35,6 +35,10 @@
             android:name=".ui.EventDetailActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".ui.SalesActivity"
+            android:exported="false" />
+
         <!-- Puedes conservar MainActivity si lo deseas -->
         <activity
             android:name=".MainActivity"

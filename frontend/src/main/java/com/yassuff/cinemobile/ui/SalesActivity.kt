@@ -9,39 +9,41 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cine.shared.ApiClient
-import com.cine.shared.EventSummary
+import com.cine.shared.Sale
 import com.cine.shared.SessionManager
 import kotlinx.coroutines.launch
+import androidx.lifecycle.viewmodel.compose.viewModel
 import java.text.SimpleDateFormat
 import java.util.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material.icons.filled.List
-import androidx.lifecycle.viewmodel.compose.viewModel
 
-class EventsActivity : ComponentActivity() {
+class SalesActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val vm: EventsViewModel = viewModel()
-            EventsScreen(vm) { eventId ->
-                val i = Intent(this, EventDetailActivity::class.java)
-                i.putExtra("eventId", eventId)
-                startActivity(i)
+            val vm: SalesViewModel = viewModel()
+            SalesScreen(vm) {
+                finish()
             }
         }
     }
 }
 
-class EventsViewModel : ViewModel() {
-    var events by mutableStateOf<List<EventSummary>>(emptyList())
+class SalesViewModel : ViewModel() {
+    var sales by mutableStateOf<List<Sale>>(emptyList())
         private set
     var loading by mutableStateOf(false)
         private set
@@ -55,11 +57,10 @@ class EventsViewModel : ViewModel() {
         error = null
         viewModelScope.launch {
             try {
-                events = ApiClient.getEvents()
+                sales = ApiClient.getSales()
             } catch (ex: Exception) {
                 ex.printStackTrace()
-                // si la excepción es de sesión, podrías propagarla para redirigir a login
-                error = ex.message ?: "Error cargando eventos"
+                error = ex.message ?: "Error cargando ventas"
             } finally {
                 loading = false
             }
@@ -69,21 +70,19 @@ class EventsViewModel : ViewModel() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EventsScreen(vm: EventsViewModel, onEventClick: (Long) -> Unit) {
+fun SalesScreen(vm: SalesViewModel, onBack: () -> Unit) {
     val ctx = LocalContext.current
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Column {
             TopAppBar(
-                title = { Text("Eventos") },
-                actions = {
-                    IconButton(onClick = {
-                        // Ir a pantalla de ventas
-                        val intent = Intent(ctx, SalesActivity::class.java)
-                        ctx.startActivity(intent)
-                    }) {
-                        Icon(Icons.Filled.List, contentDescription = "Mis Ventas")
+                title = { Text("Mis Ventas") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
                     }
+                },
+                actions = {
                     IconButton(onClick = {
                         // logout: limpiar sesión y volver a LoginActivity
                         SessionManager.clear()
@@ -91,26 +90,28 @@ fun EventsScreen(vm: EventsViewModel, onEventClick: (Long) -> Unit) {
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                         ctx.startActivity(intent)
                     }) {
-                        Icon(Icons.Filled.ExitToApp, contentDescription = "Logout")
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Logout")
                     }
                 }
             )
 
             if (vm.loading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             } else {
-                if (vm.events.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                        Text("No hay eventos para mostrar")
+                if (vm.sales.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("No hay ventas para mostrar")
                     }
                 } else {
                     LazyColumn(modifier = Modifier
                         .fillMaxSize()
                         .padding(8.dp)) {
-                        items(vm.events) { e ->
-                            EventCard(e, onClick = { onEventClick(e.id) })
+                        items(vm.sales) { sale ->
+                            SaleCard(sale, onClick = { 
+                                // TODO: Navigate to sale detail
+                            })
                         }
                     }
                 }
@@ -128,30 +129,54 @@ fun EventsScreen(vm: EventsViewModel, onEventClick: (Long) -> Unit) {
 }
 
 @Composable
-private fun EventCard(e: EventSummary, onClick: () -> Unit) {
+private fun SaleCard(sale: Sale, onClick: () -> Unit) {
     Card(modifier = Modifier
         .fillMaxWidth()
         .padding(6.dp)
         .clickable { onClick() }) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(text = e.title, style = MaterialTheme.typography.titleMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Venta",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Icon(
+                    imageVector = if (sale.resultado) Icons.Filled.CheckCircle else Icons.Filled.Close,
+                    contentDescription = if (sale.resultado) "Exitosa" else "Fallida",
+                    tint = if (sale.resultado) Color.Green else Color.Red
+                )
+            }
             Spacer(modifier = Modifier.height(4.dp))
-            Text(text = formatDateTime(e.dateTime), style = MaterialTheme.typography.bodySmall)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = "Precio: $${String.format("%.2f", e.price)}", style = MaterialTheme.typography.bodySmall)
+            Text(text = "Evento: ${sale.eventoId}", style = MaterialTheme.typography.bodySmall)
+            Text(text = "Fecha: ${formatDateTime(sale.fechaVenta)}", style = MaterialTheme.typography.bodySmall)
+            Text(text = "Precio: $${String.format("%.2f", sale.precioVenta)}", style = MaterialTheme.typography.bodySmall)
+            Text(text = "Asientos: ${sale.cantidadAsientos}", style = MaterialTheme.typography.bodySmall)
             Spacer(modifier = Modifier.height(6.dp))
-            Text(text = "Disponibles: ${e.availableSeats}")
+            Text(
+                text = sale.descripcion,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (sale.resultado) Color.Green else Color.Red
+            )
         }
     }
 }
 
 private fun formatDateTime(dateTimeStr: String): String {
     return try {
-        // Intentar parsear diferentes formatos de fecha
+        // Intentar parsear diferentes formatos de fecha ISO
         val inputFormat = when {
+            dateTimeStr.contains("T") && dateTimeStr.contains("Z") -> 
+                SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.getDefault()).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }
             dateTimeStr.contains("T") -> SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
             dateTimeStr.contains("-") -> SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-            else -> return dateTimeStr // Si no coincide con ningún formato, devolver original
+            else -> return dateTimeStr
         }
         
         val outputFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
