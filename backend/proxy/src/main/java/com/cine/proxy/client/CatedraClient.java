@@ -34,29 +34,9 @@ public class CatedraClient {
 
     public String listEventos() { return executeGet("/api/endpoints/v1/eventos"); }
     public String getEvento(String id) { return executeGet("/api/eventos/" + id); }
-    public String listarVentas() { return executeGet("/listar-ventas"); }
+    public String listarVentas() { return executeGet("/api/endpoints/v1/listar-ventas"); }
     public String listarVenta(String id) { return executeGet("/listar-venta/" + id); }
    
-    // Reemplazar listEventos
-    // public String listEventos() {
-    //     return executeGet("/api/endpoints/v1/eventos");
-    // }
-
-    // // Reemplazar getEvento
-    // public String getEvento(String id) {
-    //     return executeGet("/api/endpoints/v1/evento/" + id);
-    // }
-
-    // // Reemplazar listarVentas
-    // public String listarVentas() {
-    //     return executeGet("/api/endpoints/v1/listar-ventas");
-    // }
-
-    // // Reemplazar listarVenta
-    // public String listarVenta(String id) {
-    //     return executeGet("/api/endpoints/v1/listar-venta/" + id);
-    // }
-
 
     private String executeGet(String path) {
         WebClient client = buildClient();

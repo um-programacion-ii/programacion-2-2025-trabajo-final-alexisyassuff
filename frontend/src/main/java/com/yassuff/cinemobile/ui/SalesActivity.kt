@@ -76,7 +76,7 @@ fun SalesScreen(vm: SalesViewModel, onBack: () -> Unit) {
     Surface(modifier = Modifier.fillMaxSize()) {
         Column {
             TopAppBar(
-                title = { Text("Mis Ventas") },
+                title = { Text("Ventas") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
@@ -130,10 +130,16 @@ fun SalesScreen(vm: SalesViewModel, onBack: () -> Unit) {
 
 @Composable
 private fun SaleCard(sale: Sale, onClick: () -> Unit) {
-    Card(modifier = Modifier
-        .fillMaxWidth()
-        .padding(6.dp)
-        .clickable { onClick() }) {
+    val colorFondo = getColorForEvent(sale.evento) // Obtenemos el color de fondo según el evento
+    val iconTint = Color(0xFF4CAF50) // Verde para el check
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(6.dp)
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = colorFondo)
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -141,30 +147,53 @@ private fun SaleCard(sale: Sale, onClick: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Venta",
+                    text = "Venta realizada", // Mostramos el asiento como identificador
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Icon(
-                    imageVector = if (sale.resultado) Icons.Filled.CheckCircle else Icons.Filled.Close,
-                    contentDescription = if (sale.resultado) "Exitosa" else "Fallida",
-                    tint = if (sale.resultado) Color.Green else Color.Red
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = "Venta realizada correctamente",
+                    tint = iconTint
                 )
             }
             Spacer(modifier = Modifier.height(4.dp))
-            Text(text = "Evento: ${sale.eventoId}", style = MaterialTheme.typography.bodySmall)
-            Text(text = "Fecha: ${formatDateTime(sale.fechaVenta)}", style = MaterialTheme.typography.bodySmall)
-            Text(text = "Precio: $${String.format("%.2f", sale.precioVenta)}", style = MaterialTheme.typography.bodySmall)
-            Text(text = "Asientos: ${sale.cantidadAsientos}", style = MaterialTheme.typography.bodySmall)
-            Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = sale.descripcion,
+                text = "Evento: ${sale.evento}",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (sale.resultado) Color.Green else Color.Red
+                fontWeight = FontWeight.Bold
             )
+            Text(
+                text = "Fecha: ${formatDateTime(sale.fechaVenta)}",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(
+                text = "Asiento: ${sale.asiento}",
+                style = MaterialTheme.typography.bodySmall
+            )
+
+            sale.comprador?.let { comprador ->
+                Text(
+                    text = "Comprador: $comprador",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
     }
 }
+
+@Composable
+private fun getColorForEvent(evento: String): Color {
+    return when (evento) {
+        "evento_1" -> Color(0xFFFFCDD2) // Rojo pastel claro
+        "evento_2" -> Color(0xFFFFF9C4) // Amarillo pastel claro
+        "evento_3" -> Color(0xFFC8E6C9) // Verde pastel claro
+        "evento_4" -> Color(0xFFE1F5FE) // Azul pastel claro
+        "evento_5" -> Color(0xFFFFE0B2) // Naranja pastel claro
+        else -> Color(0xFFF5F5F5)       // Gris claro como fallback
+    }
+}
+
 
 private fun formatDateTime(dateTimeStr: String): String {
     return try {
