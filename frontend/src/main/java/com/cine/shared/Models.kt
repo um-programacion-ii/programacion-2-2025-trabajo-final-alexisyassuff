@@ -10,7 +10,10 @@ data class EventSummary(
     val price: Double = 0.0,
     val totalSeats: Int = 0,
     val rows: Int = 0,
-    val columns: Int = 0
+    val columns: Int = 0,
+    val image: String? = null,
+    val asientosDisponibles: Int = 0, // Nuevo campo: número de disponibles
+    val totalAsientos: Int = 0       // Nuevo campo: número total de asientos
 )
 
 data class Seat(
@@ -20,14 +23,12 @@ data class Seat(
     val updatedAt: String? = null
 )
 
+
 data class Sale(
-    val eventoId: Long,
-    val ventaId: Long,
+    val evento: String,
+    val asiento: String,
     val fechaVenta: String,
-    val resultado: Boolean,
-    val descripcion: String,
-    val precioVenta: Double,
-    val cantidadAsientos: Int
+    val comprador: String
 )
 
 data class SeatSale(

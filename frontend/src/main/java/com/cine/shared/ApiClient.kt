@@ -31,7 +31,6 @@ suspend fun loginRequest(username: String, password: String): AuthResponse =
 object ApiClient {
     private fun encode(v: String) = URLEncoder.encode(v, StandardCharsets.UTF_8.toString())
 
-    // --- helper para contar asientos disponibles ---
     private suspend fun getAvailableSeatsCount(eventId: Long): Int {
         return try {
             val url = "${PROXY_BASE}/api/endpoints/v1/evento/$eventId"
@@ -61,7 +60,7 @@ object ApiClient {
                         val rows = obj.optInt("filaAsientos", obj.optInt("rows", 0))
                         // soportar variantes de nombre de columnas
                         val cols = when {
-                            obj.has("columnAsientos") -> obj.optInt("columnAsientos", 0)
+                            obj.has("columnaAsientos") -> obj.optInt("columnaAsientos", 0)
                             obj.has("columns") -> obj.optInt("columns", 0)
                             else -> obj.optInt("columnas", 0)
                         }
@@ -76,7 +75,6 @@ object ApiClient {
         }
     }
 
-    // --- getEvents usando PROXY_BASE y parsing robusto ---
     suspend fun getEvents(): List<EventSummary> = withContext(Dispatchers.IO) {
         val req = Request.Builder()
             .url("${PROXY_BASE}/api/endpoints/v1/eventos")
@@ -135,17 +133,19 @@ object ApiClient {
                 }
                 val columns = when {
                     o.has("columns") -> o.optInt("columns", 0)
-                    o.has("columnAsientos") -> o.optInt("columnAsientos", 0)
+                    o.has("columnaAsientos") -> o.optInt("columnaAsientos", 0)
                     o.has("columnas") -> o.optInt("columnas", 0)
                     else -> 0
                 }
                 val totalSeats = rows * columns
+                val image = o.optString("imagen", null) // Extraer la URL de la imagen, si existe
                 val realAvailable = if (id > 0) getAvailableSeatsCount(id) else available
-                list.add(EventSummary(id, title, dateTime, realAvailable, price, totalSeats, rows, columns))
+                list.add(EventSummary(id, title, dateTime, realAvailable, price, totalSeats, rows, columns, image))
             }
             return@withContext list
         }
     }
+
     suspend fun login(username: String, password: String): AuthResponse = withContext(Dispatchers.IO) {
         val url = "$BASE_URL/authenticate"
 
@@ -218,76 +218,15 @@ object ApiClient {
         return SessionManager.getToken() ?: ""
     }
 
-    suspend fun blockSeat(eventId: Long, seatId: String): Boolean = withContext(Dispatchers.IO) {
-        val url = "$PROXY_BASE/asientos/$eventId/$seatId/block"
-        val sessionId = sessionHeaderValue()
-        println("DEBUG: blockSeat URL=$url, sessionId='$sessionId'")
-        val req = Request.Builder()
-            .url(url)
-            .post("{}".toRequestBody(JSON))
-            .addHeader("Accept", "application/json")
-            .addHeader("Content-Type", "application/json")
-            .addHeader("X-Session-Id", sessionId)
-            .build()
-        client.newCall(req).execute().use { resp ->
-            val body = resp.body?.string() ?: ""
-            if (resp.code == 401) {
-                SessionManager.clear()
-                throw UnauthorizedException()
-            }
-            if (resp.code in 200..299) return@withContext true
-            throw Exception("blockSeat failed: http=${resp.code} body=$body")
-        }
-    }
 
-    suspend fun unlockSeat(eventId: Long, seatId: String): Boolean = withContext(Dispatchers.IO) {
-        val url = "$PROXY_BASE/asientos/$eventId/$seatId/unlock"
-        val req = Request.Builder()
-            .url(url)
-            .post("{}".toRequestBody(JSON))
-            .addHeader("Accept", "application/json")
-            .addHeader("Content-Type", "application/json")
-            .addHeader("X-Session-Id", sessionHeaderValue())
-            .build()
-        client.newCall(req).execute().use { resp ->
-            val body = resp.body?.string() ?: ""
-            if (resp.code == 401) {
-                SessionManager.clear()
-                throw UnauthorizedException()
-            }
-            if (resp.code in 200..299) return@withContext true
-            throw Exception("unlockSeat failed: http=${resp.code} body=$body")
-        }
-    }
-
-    suspend fun purchaseSeat(eventId: Long, seatId: String): Boolean = withContext(Dispatchers.IO) {
-        val url = "$PROXY_BASE/asientos/$eventId/$seatId/purchase"
-        val req = Request.Builder()
-            .url(url)
-            .post("{}".toRequestBody(JSON))
-            .addHeader("Accept", "application/json")
-            .addHeader("Content-Type", "application/json")
-            .addHeader("X-Session-Id", sessionHeaderValue())
-            .build()
-        client.newCall(req).execute().use { resp ->
-            val body = resp.body?.string() ?: ""
-            if (resp.code == 401) {
-                SessionManager.clear()
-                throw UnauthorizedException()
-            }
-            if (resp.code in 200..299) return@withContext true
-            throw Exception("purchaseSeat failed: http=${resp.code} body=$body")
-        }
-    }
-
-    // Funciones para múltiples asientos usando endpoints existentes del enunciado
+    // Bloqueo de múltiples asientos
     suspend fun blockMultipleSeats(eventId: Long, seatIds: List<String>): Boolean = withContext(Dispatchers.IO) {
-        val url = "$PROXY_BASE/asientos/$eventId/block-multiple"
+        val url = "$PROXY_BASE/api/endpoints/v1/bloquear-asientos"
         val payload = JSONObject().apply {
-            put("eventoId", eventId.toString())
+            put("eventoId", eventId) // enviar eventoId en el body
             put("seatIds", JSONArray(seatIds))
         }.toString()
-        
+
         val req = Request.Builder()
             .url(url)
             .post(payload.toRequestBody(JSON))
@@ -295,6 +234,7 @@ object ApiClient {
             .addHeader("Content-Type", "application/json")
             .addHeader("X-Session-Id", sessionHeaderValue())
             .build()
+
         client.newCall(req).execute().use { resp ->
             val body = resp.body?.string() ?: ""
             if (resp.code == 401) {
@@ -306,12 +246,14 @@ object ApiClient {
         }
     }
 
-    suspend fun unblockMultipleSeats(eventId: Long, seatIds: List<String>): Boolean = withContext(Dispatchers.IO) {
-        val url = "$PROXY_BASE/asientos/$eventId/unlock-multiple"
+    // Bloqueo de un asiento individual
+    suspend fun blockSeat(eventId: Long, seatId: String): Boolean = withContext(Dispatchers.IO) {
+        val url = "$PROXY_BASE/api/endpoints/v1/bloquear-asiento"
         val payload = JSONObject().apply {
-            put("seatIds", JSONArray(seatIds))
+            put("eventoId", eventId) // incluir eventoId en el body
+            put("seatId", seatId) // incluir seatId en el body
         }.toString()
-        
+
         val req = Request.Builder()
             .url(url)
             .post(payload.toRequestBody(JSON))
@@ -319,6 +261,61 @@ object ApiClient {
             .addHeader("Content-Type", "application/json")
             .addHeader("X-Session-Id", sessionHeaderValue())
             .build()
+
+        client.newCall(req).execute().use { resp ->
+            val body = resp.body?.string() ?: ""
+            if (resp.code == 401) {
+                SessionManager.clear()
+                throw UnauthorizedException()
+            }
+            if (resp.code in 200..299) return@withContext true
+            throw Exception("blockSeat failed: http=${resp.code} body=$body")
+        }
+    }
+
+    // Desbloquear un asiento
+    suspend fun unlockSeat(eventId: Long, seatId: String): Boolean = withContext(Dispatchers.IO) {
+        val url = "$PROXY_BASE/api/endpoints/v1/desbloquear-asiento"
+        val payload = JSONObject().apply {
+            put("eventoId", eventId) // Enviar eventoId en el cuerpo
+            put("seatId", seatId) // Enviar seatId en el cuerpo
+        }.toString()
+
+        val req = Request.Builder()
+            .url(url)
+            .post(payload.toRequestBody(JSON))
+            .addHeader("Accept", "application/json")
+            .addHeader("Content-Type", "application/json")
+            .addHeader("X-Session-Id", sessionHeaderValue())
+            .build()
+
+        client.newCall(req).execute().use { resp ->
+            val body = resp.body?.string() ?: ""
+            if (resp.code == 401) {
+                SessionManager.clear()
+                throw UnauthorizedException()
+            }
+            if (resp.code in 200..299) return@withContext true
+            throw Exception("unlockSeat failed: http=${resp.code} body=$body")
+        }
+    }
+
+    // Desbloquear múltiples asientos
+    suspend fun unblockMultipleSeats(eventId: Long, seatIds: List<String>): Boolean = withContext(Dispatchers.IO) {
+        val url = "$PROXY_BASE/api/endpoints/v1/desbloquear-asientos"
+        val payload = JSONObject().apply {
+            put("eventoId", eventId) // Enviar eventoId en el cuerpo
+            put("seatIds", JSONArray(seatIds)) // Enviar lista de seatIds en el cuerpo
+        }.toString()
+
+        val req = Request.Builder()
+            .url(url)
+            .post(payload.toRequestBody(JSON))
+            .addHeader("Accept", "application/json")
+            .addHeader("Content-Type", "application/json")
+            .addHeader("X-Session-Id", sessionHeaderValue())
+            .build()
+
         client.newCall(req).execute().use { resp ->
             val body = resp.body?.string() ?: ""
             if (resp.code == 401) {
@@ -330,38 +327,15 @@ object ApiClient {
         }
     }
 
-    suspend fun purchaseMultipleSeats(eventId: Long, seatIds: List<String>): Boolean = withContext(Dispatchers.IO) {
-        val url = "$PROXY_BASE/asientos/$eventId/purchase-multiple"
-        val payload = JSONObject().apply {
-            put("seatIds", JSONArray(seatIds))
-        }.toString()
-        
-        val req = Request.Builder()
-            .url(url)
-            .post(payload.toRequestBody(JSON))
-            .addHeader("Accept", "application/json")
-            .addHeader("Content-Type", "application/json")
-            .addHeader("X-Session-Id", sessionHeaderValue())
-            .build()
-        client.newCall(req).execute().use { resp ->
-            val body = resp.body?.string() ?: ""
-            if (resp.code == 401) {
-                SessionManager.clear()
-                throw UnauthorizedException()
-            }
-            if (resp.code in 200..299) return@withContext true
-            throw Exception("purchaseMultipleSeats failed: http=${resp.code} body=$body")
-        }
-    }
-
-    // NUEVO: Compra múltiple con datos del comprador
+    // Venta de asientos múltiples
     suspend fun purchaseMultipleSeatsWithBuyer(eventId: Long, seatIds: List<String>, persona: String): Boolean = withContext(Dispatchers.IO) {
-        val url = "$PROXY_BASE/asientos/$eventId/purchase-multiple"
+        val url = "$PROXY_BASE/api/endpoints/v1/realizar-ventas" // Nueva ruta
         val payload = JSONObject().apply {
-            put("seatIds", JSONArray(seatIds))
-            put("persona", persona)
+            put("eventoId", eventId) // Incluir eventoId en el body
+            put("seatIds", JSONArray(seatIds)) // Lista de asientos
+            put("persona", persona) // Datos del comprador
         }.toString()
-        
+
         val req = Request.Builder()
             .url(url)
             .post(payload.toRequestBody(JSON))
@@ -369,6 +343,7 @@ object ApiClient {
             .addHeader("Content-Type", "application/json")
             .addHeader("X-Session-Id", sessionHeaderValue())
             .build()
+
         client.newCall(req).execute().use { resp ->
             val body = resp.body?.string() ?: ""
             if (resp.code == 401) {
@@ -380,13 +355,15 @@ object ApiClient {
         }
     }
 
-    // NUEVO: Compra individual con datos del comprador
+    // Venta de un asiento individual
     suspend fun purchaseSeatWithBuyer(eventId: Long, seatId: String, persona: String): Boolean = withContext(Dispatchers.IO) {
-        val url = "$PROXY_BASE/asientos/$eventId/$seatId/purchase"
+        val url = "$PROXY_BASE/api/endpoints/v1/realizar-venta" // Nueva ruta
         val payload = JSONObject().apply {
-            put("persona", persona)
+            put("eventoId", eventId) // Incluir eventoId en el body
+            put("seatId", seatId) // ID del asiento
+            put("persona", persona) // Datos del comprador
         }.toString()
-        
+
         val req = Request.Builder()
             .url(url)
             .post(payload.toRequestBody(JSON))
@@ -394,6 +371,7 @@ object ApiClient {
             .addHeader("Content-Type", "application/json")
             .addHeader("X-Session-Id", sessionHeaderValue())
             .build()
+
         client.newCall(req).execute().use { resp ->
             val body = resp.body?.string() ?: ""
             if (resp.code == 401) {
@@ -405,7 +383,7 @@ object ApiClient {
         }
     }
 
-    // Funciones para ventas
+    // Obtencion de ventas
     suspend fun getSales(): List<Sale> = withContext(Dispatchers.IO) {
         val req = Request.Builder()
             .url("$PROXY_BASE/api/endpoints/v1/listar-ventas")
@@ -423,69 +401,24 @@ object ApiClient {
                 if (code == 204) return@withContext emptyList<Sale>()
                 throw Exception("getSales failed: http=$code body=$body")
             }
+
             val arr = JSONArray(body)
             val list = mutableListOf<Sale>()
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
-                val eventoId = o.optLong("eventoId", 0)
-                val ventaId = o.optLong("ventaId", 0)
+                val evento = o.optString("evento", "")
+                val asiento = o.optString("asiento", "")
                 val fechaVenta = o.optString("fechaVenta", "")
-                val resultado = o.optBoolean("resultado", false)
-                val descripcion = o.optString("descripcion", "")
-                val precioVenta = o.optDouble("precioVenta", 0.0)
-                val cantidadAsientos = o.optInt("cantidadAsientos", 0)
-                list.add(Sale(eventoId, ventaId, fechaVenta, resultado, descripcion, precioVenta, cantidadAsientos))
+                val comprador = o.optString("comprador", null) // Opcional: puede ser nulo
+                list.add(Sale(evento, asiento, fechaVenta, comprador))
             }
-            return@withContext list
+
+            // Ordenar la lista por la fecha de venta (descendente)
+            val sortedList = list.sortedByDescending { it.fechaVenta }
+            return@withContext sortedList
         }
     }
-
-    suspend fun getSaleDetail(saleId: Long): SaleDetail? = withContext(Dispatchers.IO) {
-        val req = Request.Builder()
-            .url("$PROXY_BASE/api/endpoints/v1/listar-venta/$saleId")
-            .get()
-            .addHeader("Accept", "application/json")
-            .build()
-        client.newCall(req).execute().use { resp ->
-            val code = resp.code
-            val body = resp.body?.string() ?: ""
-            if (code == 401) {
-                SessionManager.clear()
-                throw UnauthorizedException("Session expired")
-            }
-            if (code !in 200..299) {
-                if (code == 404) return@withContext null
-                throw Exception("getSaleDetail failed: http=$code body=$body")
-            }
-            val obj = JSONObject(body)
-            
-            // Parse sale detail based on expected structure from enunciado
-            val eventoId = obj.optLong("eventoId", 0)
-            val ventaId = obj.optLong("ventaId", 0)
-            val fechaVenta = obj.optString("fechaVenta", "")
-            val resultado = obj.optBoolean("resultado", false)
-            val descripcion = obj.optString("descripcion", "")
-            val precioVenta = obj.optDouble("precioVenta", 0.0)
-            val cantidadAsientos = obj.optInt("cantidadAsientos", 0)
-            
-            // Parse asientos array if present
-            val asientos = mutableListOf<SeatSale>()
-            if (obj.has("asientos")) {
-                val asientosArray = obj.getJSONArray("asientos")
-                for (i in 0 until asientosArray.length()) {
-                    val asiento = asientosArray.getJSONObject(i)
-                    val fila = asiento.optInt("fila", 0)
-                    val columna = asiento.optInt("columna", 0)
-                    val nombre = asiento.optString("nombre", "")
-                    val apellido = asiento.optString("apellido", "")
-                    asientos.add(SeatSale(fila, columna, nombre, apellido))
-                }
-            }
-            
-            return@withContext SaleDetail(eventoId, ventaId, fechaVenta, resultado, descripcion, precioVenta, cantidadAsientos, asientos)
-        }
-    }
-
+    
     suspend fun getSeatState(eventId: Long, seatId: String): Map<String, Any?> = withContext(Dispatchers.IO) {
         val url = "$PROXY_BASE/asientos/$eventId/$seatId/state"
         val req = Request.Builder()

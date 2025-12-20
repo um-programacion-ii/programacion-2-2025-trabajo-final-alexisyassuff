@@ -10,6 +10,8 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 @Configuration
 public class RedisConfig {
@@ -24,6 +26,16 @@ public class RedisConfig {
 
     @Value("${spring.redis.database:0}")
     private int redisDatabase;
+
+    // @Bean
+    // public LettuceConnectionFactory redisConnectionFactory() {
+    //     return new LettuceConnectionFactory();
+    // }
+
+    // @Bean
+    // public StringRedisTemplate redisTemplate(LettuceConnectionFactory redisConnectionFactory) {
+    //     return new StringRedisTemplate(redisConnectionFactory);
+    // }
 
     @Bean
     public RedisConnectionFactory redisConnectionFactory() {

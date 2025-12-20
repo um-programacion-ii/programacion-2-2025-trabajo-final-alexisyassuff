@@ -1,5 +1,4 @@
 package com.cine.proxy.controller;
-
 import com.cine.proxy.model.Seat;
 import com.cine.proxy.service.RedisSeatService;
 import com.cine.proxy.service.SeatLockService;
@@ -12,7 +11,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -22,7 +20,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @RestController
-@RequestMapping("/asientos")
+// @RequestMapping("/asientos")
 public class AsientosController {
     private static final Logger log = LoggerFactory.getLogger(AsientosController.class);
 
@@ -39,308 +37,8 @@ public class AsientosController {
         this.redis = redis;
     }
 
-    // @GetMapping("/{eventoId}")
-    // public ResponseEntity<List<Map<String,Object>>> getAsientos(@PathVariable String eventoId) {
-    //     try {
-    //         log.info("Obteniendo asientos para evento {} - NUEVA LÓGICA", eventoId);
 
-    //         // 1. Obtener datos del evento desde cátedra para saber filas x columnas
-    //         String eventoData = null;
-    //         try {
-    //             eventoData = catedraClient.getEvento(eventoId);
-    //         } catch (Exception e) {
-    //             // No detener aquí: permitimos fallback a Redis/keys si la cátedra no responde.
-    //             log.warn("No se pudo obtener evento {} desde cátedra: {}", eventoId, e.getMessage());
-    //             eventoData = null;
-    //         }
-
-    //         JsonNode eventoNode = null;
-    //         int filas = 0;
-    //         int columnas = 0;
-    //         if (eventoData != null && !eventoData.isBlank()) {
-    //             try {
-    //                 // Log para depurar qué JSON llegó (truncado a 1000 chars)
-    //                 log.info("JSON evento recibido (truncado): {}", eventoData.length() > 1000 ? eventoData.substring(0, 1000) + "..." : eventoData);
-
-    //                 eventoNode = objectMapper.readTree(eventoData);
-
-    //                 // Manejar caso en que el evento esté anidado, p.ej. {"evento": {...}}
-    //                 JsonNode evtNode = eventoNode;
-    //                 if (evtNode.has("evento") && evtNode.path("evento").isObject()) {
-    //                     evtNode = evtNode.path("evento");
-    //                 }
-
-    //                 // Hacer evtNode final para que pueda ser usado desde el lambda
-    //                 final JsonNode searchNode = evtNode;
-
-    //                 // Helper inline: buscar varios nombres posibles y parsear int (acepta texto)
-    //                 java.util.function.Function<String[], Integer> findInt = (String[] names) -> {
-    //                     for (String name : names) {
-    //                         JsonNode n = searchNode.path(name);
-    //                         if (!n.isMissingNode() && !n.isNull()) {
-    //                             if (n.isInt() || n.isLong()) {
-    //                                 return n.asInt();
-    //                             }
-    //                             String txt = n.asText(null);
-    //                             if (txt != null && !txt.isBlank()) {
-    //                                 try {
-    //                                     return Integer.parseInt(txt.trim());
-    //                                 } catch (NumberFormatException ex) {
-    //                                     try {
-    //                                         double d = Double.parseDouble(txt.trim());
-    //                                         return (int) d;
-    //                                     } catch (Exception ex2) {
-    //                                         // ignore and continue
-    //                                     }
-    //                                 }
-    //                             }
-    //                         }
-    //                     }
-    //                     return 0;
-    //                 };
-
-    //                 filas = findInt.apply(new String[] { "filaAsientos", "filas", "rows" });
-    //                 columnas = findInt.apply(new String[] { "columnaAsientos", "columnAsientos", "columnas", "columns" });
-
-    //             } catch (Exception e) {
-    //                 log.warn("Error parseando JSON del evento {}: {}", eventoId, e.getMessage());
-    //                 filas = 0;
-    //                 columnas = 0;
-    //             }
-    //         } else {
-    //             // cátedra no devolvió datos
-    //             filas = 0;
-    //             columnas = 0;
-    //         }
-
-    //         log.info("Evento {}: {} filas x {} columnas = {} asientos totales", eventoId, filas, columnas, filas * columnas);
-
-    //         // 2. Generar matriz completa de asientos como LIBRE (si filas o columnas son 0, la matriz quedará vacía)
-    //         List<Map<String,Object>> allSeats = new ArrayList<>();
-    //         for (int fila = 1; fila <= filas; fila++) {
-    //             for (int columna = 1; columna <= columnas; columna++) {
-    //                 String seatId = String.format("r%dc%d", fila, columna);
-
-    //                 Map<String,Object> seat = new HashMap<>();
-    //                 seat.put("seatId", seatId);
-    //                 seat.put("status", "LIBRE");
-    //                 seat.put("fila", fila);
-    //                 seat.put("columna", columna);
-
-    //                 allSeats.add(seat);
-    //             }
-    //         }
-
-    //         log.info("Generada matriz base de {} asientos LIBRE", allSeats.size());
-
-    //         // 3. Leer datos de Redis para mergear estados reales
-    //         String redisKey = "evento_" + eventoId;
-    //         log.info("=== DEBUG REDIS ===");
-    //         log.info("Intentando leer key: '{}'", redisKey);
-    //         log.info("Redis host: {}, port: {}, database: {}", "192.168.194.250", 6379, 0);
-
-    //         // Verificar conexión y visibilidad de keys
-    //         try {
-    //             Set<String> allKeys = redis.keys("*");
-    //             log.info("Total keys visibles: {}", allKeys.size());
-    //             log.info("Keys disponibles: {}", allKeys);
-
-    //             Set<String> eventoKeys = redis.keys("evento_*");
-    //             log.info("Keys evento_* encontradas: {}", eventoKeys);
-
-    //         } catch (Exception e) {
-    //             log.error("Error listando keys: {}", e.getMessage());
-    //         }
-
-    //         String redisData = null;
-    //         try {
-    //             redisData = redis.opsForValue().get(redisKey);
-    //         } catch (Exception e) {
-    //             log.error("Error leyendo key {} desde Redis: {}", redisKey, e.getMessage());
-    //             redisData = null;
-    //         }
-    //         log.info("Resultado GET '{}': {}", redisKey, redisData != null ? "FOUND" : "NULL");
-
-    //         if (redisData != null && !redisData.trim().isEmpty()) {
-    //             // Caso habitual: evento_{id} existe como JSON con campo "asientos"
-    //             try {
-    //                 log.info("Datos encontrados en Redis para {}, mergeando...", redisKey);
-    //                 log.info("Datos Redis (primeros 200 chars): {}", redisData.length() > 200 ? redisData.substring(0, 200) + "..." : redisData);
-
-    //                 JsonNode redisRoot = objectMapper.readTree(redisData);
-    //                 JsonNode redisSeats = redisRoot.path("asientos");
-
-    //                 if (redisSeats.isArray()) {
-    //                     int mergedCount = 0;
-
-    //                     for (JsonNode redisSeat : redisSeats) {
-    //                         int fila = redisSeat.path("fila").asInt();
-    //                         int columna = redisSeat.path("columna").asInt();
-    //                         String estado = redisSeat.path("estado").asText();
-
-    //                         String status = "LIBRE";
-    //                         if ("Vendido".equalsIgnoreCase(estado)) {
-    //                             status = "VENDIDO";
-    //                         } else if ("Bloqueado".equalsIgnoreCase(estado)) {
-    //                             status = "BLOQUEADO";
-    //                         }
-
-    //                         log.debug("Procesando asiento Redis - fila: {}, columna: {}, estado: {} -> {}", fila, columna, estado, status);
-
-    //                         for (Map<String,Object> seat : allSeats) {
-    //                             Integer seatFila = (Integer) seat.get("fila");
-    //                             Integer seatColumna = (Integer) seat.get("columna");
-
-    //                             if (seatFila != null && seatColumna != null && seatFila.equals(fila) && seatColumna.equals(columna)) {
-    //                                 seat.put("status", status);
-    //                                 if (!"LIBRE".equals(status)) {
-    //                                     seat.put("source", "redis");
-    //                                 }
-    //                                 mergedCount++;
-    //                                 log.debug("Actualizado asiento fila {} columna {} a estado {}", fila, columna, status);
-    //                                 break;
-    //                             }
-    //                         }
-    //                     }
-
-    //                     log.info("Mergeados {} asientos de Redis con estados específicos", mergedCount);
-    //                 } else {
-    //                     log.warn("Datos de Redis no contienen array 'asientos' válido para evento {}", eventoId);
-    //                 }
-    //             } catch (Exception e) {
-    //                 log.error("Error parseando/mergeando datos JSON de Redis para {}: {}", eventoId, e.getMessage(), e);
-    //             }
-    //         } else {
-    //             // FALLBACK: intentar deducir estados desde claves puntuales (sold: / seat_lock:) que estén en Redis
-    //             log.info("No hay datos JSON en Redis para evento {}. Aplicando fallback por claves sold/lock...", eventoId);
-
-    //             try {
-    //                 int mergedCount = 0;
-
-    //                 // 1) Procesar claves sold:{eventoId}:{seatId} -> marcar VENDIDO
-    //                 Set<String> soldKeys = redis.keys("sold:" + eventoId + ":*");
-    //                 if (soldKeys != null && !soldKeys.isEmpty()) {
-    //                     log.info("Found sold keys for evento {}: {}", eventoId, soldKeys);
-    //                     for (String soldKey : soldKeys) {
-    //                         String[] parts = soldKey.split(":");
-    //                         if (parts.length >= 3) {
-    //                             String soldSeatId = parts[2];
-    //                             java.util.regex.Matcher m = java.util.regex.Pattern.compile("r(\\d+)c(\\d+)").matcher(soldSeatId);
-    //                             Integer sf = null, sc = null;
-    //                             if (m.matches()) {
-    //                                 sf = Integer.parseInt(m.group(1));
-    //                                 sc = Integer.parseInt(m.group(2));
-    //                             }
-    //                             for (Map<String,Object> seat : allSeats) {
-    //                                 Integer seatFila = (Integer) seat.get("fila");
-    //                                 Integer seatColumna = (Integer) seat.get("columna");
-    //                                 String seatIdStr = (String) seat.get("seatId");
-    //                                 boolean match = false;
-    //                                 if (sf != null && sc != null) {
-    //                                     match = seatFila != null && seatColumna != null && seatFila.equals(sf) && seatColumna.equals(sc);
-    //                                 } else {
-    //                                     match = seatIdStr != null && seatIdStr.equals(soldSeatId);
-    //                                 }
-    //                                 if (match) {
-    //                                     seat.put("status", "VENDIDO");
-    //                                     seat.put("source", "redis-sold");
-    //                                     mergedCount++;
-    //                                     break;
-    //                                 }
-    //                             }
-    //                         }
-    //                     }
-    //                 }
-
-    //                 // 2) Procesar locks temporales seat_lock:{eventoId}:{seatId} -> marcar BLOQUEADO y holder
-    //                 Set<String> lockKeys = redis.keys("seat_lock:" + eventoId + ":*");
-    //                 if (lockKeys != null && !lockKeys.isEmpty()) {
-    //                     log.info("Found lock keys for evento {}: {}", eventoId, lockKeys);
-    //                     for (String lockKey : lockKeys) {
-    //                         String[] parts = lockKey.split(":");
-    //                         if (parts.length >= 3) {
-    //                             String lockSeatId = parts[2];
-    //                             String lockOwner = redis.opsForValue().get(lockKey);
-    //                             java.util.regex.Matcher m = java.util.regex.Pattern.compile("r(\\d+)c(\\d+)").matcher(lockSeatId);
-    //                             Integer lf = null, lc = null;
-    //                             if (m.matches()) {
-    //                                 lf = Integer.parseInt(m.group(1));
-    //                                 lc = Integer.parseInt(m.group(2));
-    //                             }
-    //                             for (Map<String,Object> seat : allSeats) {
-    //                                 Integer seatFila = (Integer) seat.get("fila");
-    //                                 Integer seatColumna = (Integer) seat.get("columna");
-    //                                 String seatIdStr = (String) seat.get("seatId");
-    //                                 boolean match = false;
-    //                                 if (lf != null && lc != null) {
-    //                                     match = seatFila != null && seatColumna != null && seatFila.equals(lf) && seatColumna.equals(lc);
-    //                                 } else {
-    //                                     match = seatIdStr != null && seatIdStr.equals(lockSeatId);
-    //                                 }
-    //                                 if (match) {
-    //                                     String current = (String) seat.get("status");
-    //                                     if (!"VENDIDO".equals(current)) {
-    //                                         seat.put("status", "BLOQUEADO");
-    //                                         if (lockOwner != null && !lockOwner.isBlank()) seat.put("holder", lockOwner);
-    //                                         seat.put("source", "redis-lock");
-    //                                         mergedCount++;
-    //                                     }
-    //                                     break;
-    //                                 }
-    //                             }
-    //                         }
-    //                     }
-    //                 }
-
-    //                 log.info("Fallback merge applied: {} seats marked from sold/locks for evento {}", mergedCount, eventoId);
-
-    //             } catch (Exception e) {
-    //                 log.error("Error applying fallback merge for evento {}: {}", eventoId, e.getMessage(), e);
-    //                 log.info("No hay datos en Redis para evento {} - todos los asientos permanecen LIBRE", eventoId);
-    //             }
-    //         }
-
-    //         // 4. También aplicar estados de memoria local (SeatLockService) para compatibilidad
-    //         int eventoIdInt;
-    //         try {
-    //             eventoIdInt = Integer.parseInt(eventoId);
-    //         } catch (Exception ex) {
-    //             eventoIdInt = -1; // fallback
-    //         }
-
-    //         for (Map<String,Object> seat : allSeats) {
-    //             String seatId = (String) seat.get("seatId");
-
-    //             // Si no tiene estado específico de Redis, verificar memoria local
-    //             String currentStatus = (String) seat.get("status");
-    //             if ("LIBRE".equals(currentStatus)) {
-    //                 boolean sold = seatLockService.isSold(eventoIdInt, seatId);
-    //                 String owner = seatLockService.getLockOwner(eventoIdInt, seatId);
-
-    //                 if (sold) {
-    //                     seat.put("status", "VENDIDO");
-    //                     if (owner != null) {
-    //                         seat.put("holder", owner);
-    //                     }
-    //                 } else if (owner != null) {
-    //                     seat.put("status", "BLOQUEADO");
-    //                     seat.put("holder", owner);
-    //                 }
-    //             }
-    //         }
-
-    //         log.info("Devolviendo {} asientos para evento {}", allSeats.size(), eventoId);
-    //         return ResponseEntity.ok(allSeats);
-
-    //     } catch (Exception ex) {
-    //         log.error("Error generando matriz de asientos para evento {}: {}", eventoId, ex.getMessage(), ex);
-    //         Map<String, Object> err = new HashMap<>();
-    //         err.put("error", "Error interno: " + ex.getMessage());
-    //         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(List.of(err));
-    //     }
-    // }
-
-    @GetMapping("/{eventoId}")
+    @GetMapping("/asientos/{eventoId}")
     public ResponseEntity<List<Map<String,Object>>> getAsientos(@PathVariable String eventoId,
                                                                 @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
         try {
@@ -682,222 +380,27 @@ public class AsientosController {
     }
 
 
-    /**
-     * POST /asientos/{eventoId}/{seatId}/unlock
-     * Header: X-Session-Id
-     */
-    @PostMapping("/{eventoId}/{seatId}/unlock")
-    public ResponseEntity<?> unlockSeat(@PathVariable int eventoId,
-                                        @PathVariable String seatId,
-                                        @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
-        try {
-            if (sessionId == null || sessionId.isBlank()) {
-                Map<String,Object> resp = new HashMap<>();
-                resp.put("error", "Missing X-Session-Id");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
-            }
-            
-            log.info("Intentando desbloquear asiento {} evento {} con sessionId: {}", seatId, eventoId, sessionId);
-            
-            // NUEVO SISTEMA: Liberar bloqueo temporal con TTL
-            boolean released = seatService.releaseSeatLock(String.valueOf(eventoId), seatId, sessionId);
-            
-            if (released) {
-                // También liberar en memoria local para compatibilidad
-                seatLockService.unlockIfOwner(eventoId, seatId, sessionId);
-                
-                Map<String,Object> r = new HashMap<>();
-                r.put("result", "unlocked");
-                return ResponseEntity.ok(r);
-            } else {
-                Map<String,Object> r = new HashMap<>();
-                r.put("error", "NOT_OWNER_OR_NOT_LOCKED");
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(r);
-            }
-        } catch (Exception ex) {
-            log.error("Error unlockSeat: {}", ex.getMessage(), ex);
-            Map<String, Object> err = new HashMap<>();
-            err.put("error", "internal");
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);
-        }
-    }
 
-    /**
-     * POST /asientos/{eventoId}/{seatId}/block-for-purchase
-     * Header: X-Session-Id
-     * 
-     * NUEVO: Bloquea un asiento específicamente para compra con TTL=5 minutos.
-     * El usuario debe llamar esto ANTES de purchase para reservar el asiento temporalmente.
-     */
-    @PostMapping("/{eventoId}/{seatId}/block")
-    public ResponseEntity<?> blockSeatForPurchase(@PathVariable int eventoId,
-                                                  @PathVariable String seatId,
-                                                  @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
+    @PostMapping("/api/endpoints/v1/bloquear-asientos")
+    public ResponseEntity<?> bloquearAsientos(
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
         try {
+            // Validar el token de sesión
             if (sessionId == null || sessionId.isBlank()) {
-                Map<String,Object> resp = new HashMap<>();
-                resp.put("error", "Missing X-Session-Id");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
-            }
-            
-            log.info("Intentando bloquear asiento {} para compra en evento {} con sessionId: {}", seatId, eventoId, sessionId);
-            
-            // Usar el sistema de bloqueo temporal para compra
-            boolean blocked = seatService.tryBlockSeatForPurchase(String.valueOf(eventoId), seatId, sessionId);
-            
-            if (blocked) {
-                Map<String,Object> ok = new HashMap<>();
-                ok.put("result", "blocked_for_purchase");
-                ok.put("seatId", seatId);
-                ok.put("owner", sessionId);
-                ok.put("ttl_minutes", 5);
-                ok.put("message", "Asiento bloqueado. Tiene 5 minutos para completar la compra.");
-                return ResponseEntity.ok(ok);
-            } else {
-                // Verificar por qué falló
-                String lockOwner = seatService.getSeatLockOwner(String.valueOf(eventoId), seatId);
-                if (lockOwner != null) {
-                    Map<String,Object> conflict = new HashMap<>();
-                    conflict.put("error", "BLOCKED_BY_OTHER");
-                    conflict.put("owner", lockOwner);
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body(conflict);
-                } else {
-                    Map<String,Object> unavailable = new HashMap<>();
-                    unavailable.put("error", "SEAT_NOT_AVAILABLE");
-                    unavailable.put("message", "Asiento no disponible para bloqueo (posiblemente vendido)");
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body(unavailable);
-                }
-            }
-        } catch (Exception ex) {
-            log.error("Error blockSeatForPurchase: {}", ex.getMessage(), ex);
-            Map<String, Object> err = new HashMap<>();
-            err.put("error", "internal");
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);
-        }
-    }
-
-    /**
-     * POST /asientos/{eventoId}/{seatId}/purchase
-     * Header: X-Session-Id
-     * 
-     * MODIFICADO: Ahora requiere que el asiento esté previamente bloqueado por el usuario.
-     * Flujo recomendado: 
-     * 1. POST /block-for-purchase (bloqueo temporal TTL=5min)
-     * 2. POST /purchase (compra definitiva si está bloqueado)
-     */
-    @PostMapping("/{eventoId}/{seatId}/purchase")
-    public ResponseEntity<?> purchaseSeat(@PathVariable int eventoId,
-                                          @PathVariable String seatId,
-                                          @RequestHeader(value = "X-Session-Id", required = false) String sessionId,
-                                          @RequestBody(required = false) Map<String, Object> buyerData) {
-        try {
-            if (sessionId == null || sessionId.isBlank()) {
-                Map<String,Object> resp = new HashMap<>();
-                resp.put("error", "Missing X-Session-Id");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
-            }
-            
-            log.info("Intentando comprar asiento {} evento {} con sessionId: {}", seatId, eventoId, sessionId);
-            
-            // Extraer datos del comprador del body (obligatorio)
-            String persona = "Sin nombre";
-            
-            if (buyerData != null) {
-                persona = (String) buyerData.getOrDefault("persona", "Sin nombre");
-            }
-            
-            log.info("Datos del comprador - Persona: {}", persona);
-            
-            // NUEVO FLUJO DE COMPRA CON BLOQUEO TEMPORAL PREVIO:
-            // 1. Verificar que el usuario tenga el asiento bloqueado
-            // 2. Si está bloqueado correctamente, proceder con la venta
-            // 3. Marcar como VENDIDO con datos del comprador y eliminar bloqueo temporal
-            
-            boolean purchased = seatService.tryPurchaseBlockedSeat(String.valueOf(eventoId), seatId, sessionId, persona, "");
-            
-            if (purchased) {
-                // Compra exitosa - también actualizar memoria local para compatibilidad
-                seatLockService.purchase(eventoId, seatId, sessionId);
-                
-                try {
-                    // OPCIONAL: También enviar a cátedra si está configurada
-                    Map<String, Object> filaColumna = parseSeatId(seatId);
-                    if (filaColumna != null) {
-                        Map<String, Object> payload = new HashMap<>();
-                        payload.put("eventoId", eventoId);
-                        payload.put("asientos", List.of(filaColumna));
-                        payload.put("precioVenta", 1000.0);
-                        
-                        String jsonPayload = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(payload);
-                        String catedraResponse = catedraClient.executePost("/api/endpoints/v1/realizar-venta", jsonPayload);
-                        log.info("También enviado venta a cátedra: {}", catedraResponse);
-                    }
-                } catch (Exception ex) {
-                    log.warn("Error enviando venta a cátedra: {}", ex.getMessage());
-                    // NO fallar - la venta local ya funcionó
-                }
-                
-                Map<String,Object> ok = new HashMap<>();
-                ok.put("result", "purchased");
-                ok.put("seatId", seatId);
-                ok.put("owner", sessionId);
-                ok.put("comprador", Map.of("persona", persona));
-                ok.put("fechaVenta", java.time.Instant.now().toString());
-                return ResponseEntity.ok(ok);
-                
-            } else {
-                // Compra falló - verificar por qué
-                String lockOwner = seatService.getSeatLockOwner(String.valueOf(eventoId), seatId);
-                
-                if (lockOwner == null) {
-                    // No hay bloqueo temporal - usuario debe bloquear primero
-                    Map<String,Object> r = new HashMap<>();
-                    r.put("error", "SEAT_NOT_BLOCKED");
-                    r.put("message", "Debe bloquear el asiento antes de comprarlo");
-                    return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED).body(r);
-                } else if (!sessionId.equals(lockOwner)) {
-                    // Bloqueado por otro usuario
-                    Map<String,Object> r = new HashMap<>();
-                    r.put("error", "BLOCKED_BY_OTHER");
-                    r.put("owner", lockOwner);
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body(r);
-                } else {
-                    // Ya vendido o error interno
-                    Map<String,Object> r = new HashMap<>();
-                    r.put("error", "SEAT_NOT_AVAILABLE");
-                    r.put("message", "Asiento ya vendido o no disponible");
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body(r);
-                }
-            }
-        } catch (Exception ex) {
-            log.error("Error purchaseSeat: {}", ex.getMessage(), ex);
-            Map<String, Object> err = new HashMap<>();
-            err.put("error", "internal");
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);
-        }
-    }
-
-
-    /**
-     * POST /asientos/{eventoId}/block-multiple
-     * Bloquea múltiples asientos a la vez (hasta 4)
-     * Body: {"seatIds": ["r1c1", "r1c2"], "sessionId": "..."}
-     */
-    @PostMapping("/{eventoId}/block-multiple")
-    public ResponseEntity<?> blockMultipleSeats(@PathVariable int eventoId,
-                                                @RequestBody Map<String, Object> request,
-                                                @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
-        try {
-            if (sessionId == null || sessionId.isBlank()) {
-                Map<String,Object> resp = new HashMap<>();
+                Map<String, Object> resp = new HashMap<>();
                 resp.put("error", "Missing X-Session-Id");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
             }
 
+            // Extraer eventoId y seatIds del body
+            int eventoId = (int) request.get("eventoId"); // Obtener eventoId
             @SuppressWarnings("unchecked")
-            List<String> seatIds = (List<String>) request.get("seatIds");
+            List<String> seatIds = (List<String>) request.get("seatIds"); // Lista de asientos
+
+            // Validar seatIds
             if (seatIds == null || seatIds.isEmpty() || seatIds.size() > 4) {
-                Map<String,Object> resp = new HashMap<>();
+                Map<String, Object> resp = new HashMap<>();
                 resp.put("error", "Invalid seatIds (max 4 seats)");
                 return ResponseEntity.badRequest().body(resp);
             }
@@ -907,7 +410,7 @@ public class AsientosController {
 
             List<String> blocked = new ArrayList<>();
             List<String> failed = new ArrayList<>();
-            
+
             for (String seatId : seatIds) {
                 try {
                     var result = seatLockService.tryBlock(eventoId, seatId, sessionId);
@@ -928,7 +431,7 @@ public class AsientosController {
             response.put("blocked", blocked);
             response.put("failed", failed);
             response.put("totalBlocked", blocked.size());
-            
+
             if (blocked.isEmpty()) {
                 response.put("result", "none_blocked");
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
@@ -939,7 +442,7 @@ public class AsientosController {
                 response.put("result", "partial_blocked");
                 return ResponseEntity.ok(response);
             }
-            
+
         } catch (Exception ex) {
             log.error("Error blockMultipleSeats: {}", ex.getMessage(), ex);
             Map<String, Object> err = new HashMap<>();
@@ -948,49 +451,101 @@ public class AsientosController {
         }
     }
 
-    /**
-     * POST /asientos/{eventoId}/purchase-multiple  
-     * Vende múltiples asientos a la vez (hasta 4)
-     * Body: {"seatIds": ["r1c1", "r1c2"], "persona": "Juan Pérez"}
-     */
-    @PostMapping("/{eventoId}/purchase-multiple")
-    public ResponseEntity<?> purchaseMultipleSeats(@PathVariable int eventoId,
-                                                   @RequestBody Map<String, Object> request,
-                                                   @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
+    @PostMapping("/bloquear-asiento")
+    public ResponseEntity<?> bloquearAsiento(
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
         try {
+            // Validar el token de sesión
             if (sessionId == null || sessionId.isBlank()) {
-                Map<String,Object> resp = new HashMap<>();
+                Map<String, Object> resp = new HashMap<>();
                 resp.put("error", "Missing X-Session-Id");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
             }
 
+            // Extraer eventoId y seatId del body
+            int eventoId = (int) request.get("eventoId");
+            String seatId = (String) request.get("seatId");
+
+            log.info("Intentando bloquear asiento {} para compra en evento {} con sessionId: {}", seatId, eventoId, sessionId);
+
+            // Usar el sistema de bloqueo temporal para compra
+            boolean blocked = seatService.tryBlockSeatForPurchase(String.valueOf(eventoId), seatId, sessionId);
+
+            if (blocked) {
+                Map<String, Object> ok = new HashMap<>();
+                ok.put("result", "blocked_for_purchase");
+                ok.put("seatId", seatId);
+                ok.put("owner", sessionId);
+                ok.put("ttl_minutes", 5);
+                ok.put("message", "Asiento bloqueado. Tiene 5 minutos para completar la compra.");
+                return ResponseEntity.ok(ok);
+            } else {
+                // Verificar por qué falló
+                String lockOwner = seatService.getSeatLockOwner(String.valueOf(eventoId), seatId);
+                if (lockOwner != null) {
+                    Map<String, Object> conflict = new HashMap<>();
+                    conflict.put("error", "BLOCKED_BY_OTHER");
+                    conflict.put("owner", lockOwner);
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(conflict);
+                } else {
+                    Map<String, Object> unavailable = new HashMap<>();
+                    unavailable.put("error", "SEAT_NOT_AVAILABLE");
+                    unavailable.put("message", "Asiento no disponible para bloqueo (posiblemente vendido)");
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(unavailable);
+                }
+            }
+        } catch (Exception ex) {
+            log.error("Error blockSeatForPurchase: {}", ex.getMessage(), ex);
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "internal");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);
+        }
+    }
+
+
+
+    // Endpoint de venta múltiple de asientos
+    @PostMapping("/api/endpoints/v1/realizar-ventas")
+    public ResponseEntity<?> venderAsientos(
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
+        try {
+            // Validar el token de sesión
+            if (sessionId == null || sessionId.isBlank()) {
+                Map<String, Object> resp = new HashMap<>();
+                resp.put("error", "Missing X-Session-Id");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
+            }
+
+            // Extraer eventoId y seatIds del body
+            int eventoId = (int) request.get("eventoId");
             @SuppressWarnings("unchecked")
             List<String> seatIds = (List<String>) request.get("seatIds");
+            
             if (seatIds == null || seatIds.isEmpty() || seatIds.size() > 4) {
-                Map<String,Object> resp = new HashMap<>();
+                Map<String, Object> resp = new HashMap<>();
                 resp.put("error", "Invalid seatIds (max 4 seats)");
                 return ResponseEntity.badRequest().body(resp);
             }
 
-            // Extraer datos del comprador (obligatorio)
+            // Extraer datos del comprador
             String persona = (String) request.getOrDefault("persona", "Sin nombre");
-            
+
             log.info("Intentando vender {} asientos para evento {} con sessionId: {} para persona: {}", 
                     seatIds.size(), eventoId, sessionId, persona);
 
             List<String> sold = new ArrayList<>();
             List<String> failed = new ArrayList<>();
-            
+
             for (String seatId : seatIds) {
                 try {
-                    // Usar el mismo flujo que purchase individual con bloqueo previo
+                    // Mantener la lógica existente
                     boolean purchased = seatService.tryPurchaseBlockedSeat(String.valueOf(eventoId), seatId, sessionId, persona, "");
-                    
+
                     if (purchased) {
-                        // También actualizar memoria local para compatibilidad
                         seatLockService.purchase(eventoId, seatId, sessionId);
                         sold.add(seatId);
-                        
                     } else {
                         failed.add(seatId);
                         log.warn("No se pudo vender asiento {}: no bloqueado por usuario", seatId);
@@ -1005,7 +560,7 @@ public class AsientosController {
             response.put("sold", sold);
             response.put("failed", failed);
             response.put("totalSold", sold.size());
-            
+
             if (sold.isEmpty()) {
                 response.put("result", "none_sold");
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
@@ -1016,7 +571,7 @@ public class AsientosController {
                 response.put("result", "partial_sold");
                 return ResponseEntity.ok(response);
             }
-            
+
         } catch (Exception ex) {
             log.error("Error purchaseMultipleSeats: {}", ex.getMessage(), ex);
             Map<String, Object> err = new HashMap<>();
@@ -1025,49 +580,162 @@ public class AsientosController {
         }
     }
 
-    /**
-     * POST /asientos/{eventoId}/unlock-multiple  
-     * Desbloquea múltiples asientos a la vez (hasta 4)
-     * Body: {"seatIds": ["r1c1", "r1c2"]}
-     */
-    @PostMapping("/{eventoId}/unlock-multiple")
-    public ResponseEntity<?> unlockMultipleSeats(@PathVariable int eventoId,
-                                                 @RequestBody Map<String, Object> request,
-                                                 @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
+    // Endpoint de venta individual de un asiento
+    @PostMapping("/api/endpoints/v1/realizar-venta")
+    public ResponseEntity<?> venderAsiento(
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
         try {
+            // Validar el token de sesión
             if (sessionId == null || sessionId.isBlank()) {
-                Map<String,Object> resp = new HashMap<>();
+                Map<String, Object> resp = new HashMap<>();
                 resp.put("error", "Missing X-Session-Id");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
             }
 
+            // Extraer eventoId y seatId del body
+            int eventoId = (int) request.get("eventoId");
+            String seatId = (String) request.get("seatId");
+
+            // Extraer datos del comprador
+            String persona = (String) request.getOrDefault("persona", "Sin nombre");
+
+            log.info("Intentando comprar asiento {} evento {} con sessionId: {}", seatId, eventoId, sessionId);
+            log.info("Datos del comprador - Persona: {}", persona);
+
+            boolean purchased = seatService.tryPurchaseBlockedSeat(String.valueOf(eventoId), seatId, sessionId, persona, "");
+
+            if (purchased) {
+                seatLockService.purchase(eventoId, seatId, sessionId);
+
+                try {
+                    Map<String, Object> filaColumna = parseSeatId(seatId);
+                    if (filaColumna != null) {
+                        Map<String, Object> payload = new HashMap<>();
+                        payload.put("eventoId", eventoId);
+                        payload.put("asientos", List.of(filaColumna));
+                        payload.put("precioVenta", 1000.0);
+
+                        String jsonPayload = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(payload);
+                        String catedraResponse = catedraClient.executePost("/api/endpoints/v1/realizar-venta", jsonPayload);
+                        log.info("También enviado venta a cátedra: {}", catedraResponse);
+                    }
+                } catch (Exception ex) {
+                    log.warn("Error enviando venta a cátedra: {}", ex.getMessage());
+                    // NO fallar - la venta local ya funcionó
+                }
+
+                Map<String, Object> ok = new HashMap<>();
+                ok.put("result", "purchased");
+                ok.put("seatId", seatId);
+                ok.put("owner", sessionId);
+                ok.put("comprador", Map.of("persona", persona));
+                ok.put("fechaVenta", java.time.Instant.now().toString());
+                return ResponseEntity.ok(ok);
+
+            } else {
+                String lockOwner = seatService.getSeatLockOwner(String.valueOf(eventoId), seatId);
+
+                if (lockOwner == null) {
+                    Map<String, Object> r = new HashMap<>();
+                    r.put("error", "SEAT_NOT_BLOCKED");
+                    r.put("message", "Debe bloquear el asiento antes de comprarlo");
+                    return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED).body(r);
+                } else if (!sessionId.equals(lockOwner)) {
+                    Map<String, Object> r = new HashMap<>();
+                    r.put("error", "BLOCKED_BY_OTHER");
+                    r.put("owner", lockOwner);
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(r);
+                } else {
+                    Map<String, Object> r = new HashMap<>();
+                    r.put("error", "SEAT_NOT_AVAILABLE");
+                    r.put("message", "Asiento ya vendido o no disponible");
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(r);
+                }
+            }
+        } catch (Exception ex) {
+            log.error("Error purchaseSeat: {}", ex.getMessage(), ex);
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "internal");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);
+        }
+    }
+
+
+    @PostMapping("/desbloquear-asiento")
+    public ResponseEntity<?> desbloquearAsiento(
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
+        try {
+            if (sessionId == null || sessionId.isBlank()) {
+                Map<String, Object> resp = new HashMap<>();
+                resp.put("error", "Missing X-Session-Id");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
+            }
+
+            int eventoId = (int) request.get("eventoId");
+            String seatId = (String) request.get("seatId");
+
+            log.info("Intentando desbloquear asiento {} en evento {} con sessionId: {}", seatId, eventoId, sessionId);
+
+            boolean released = seatService.releaseSeatLock(String.valueOf(eventoId), seatId, sessionId);
+
+            if (released) {
+                seatLockService.unlockIfOwner(eventoId, seatId, sessionId);
+                Map<String, Object> r = new HashMap<>();
+                r.put("result", "unlocked");
+                return ResponseEntity.ok(r);
+            } else {
+                Map<String, Object> r = new HashMap<>();
+                r.put("error", "NOT_OWNER_OR_NOT_LOCKED");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(r);
+            }
+        } catch (Exception ex) {
+            log.error("Error desbloqueando asiento: {}", ex.getMessage(), ex);
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "internal");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);
+        }
+    }
+
+    // Endpoint para desbloqueo de múltiples asientos
+    @PostMapping("/desbloquear-asientos")
+    public ResponseEntity<?> desbloquearAsientos(
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
+        try {
+            if (sessionId == null || sessionId.isBlank()) {
+                Map<String, Object> resp = new HashMap<>();
+                resp.put("error", "Missing X-Session-Id");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
+            }
+
+            int eventoId = (int) request.get("eventoId");
             @SuppressWarnings("unchecked")
             List<String> seatIds = (List<String>) request.get("seatIds");
+
             if (seatIds == null || seatIds.isEmpty() || seatIds.size() > 4) {
-                Map<String,Object> resp = new HashMap<>();
+                Map<String, Object> resp = new HashMap<>();
                 resp.put("error", "Invalid seatIds (max 4 seats)");
                 return ResponseEntity.badRequest().body(resp);
             }
 
-            log.info("Intentando desbloquear {} asientos para evento {} con sessionId: {}", 
-                    seatIds.size(), eventoId, sessionId);
+            log.info("Intentando desbloquear múltiples asientos en evento {} con sessionId: {}", eventoId, sessionId);
 
-            // Usar el nuevo método eficiente de desbloqueo múltiple
             Map<String, Boolean> releaseResults = seatService.releaseMultipleSeatLocks(String.valueOf(eventoId), seatIds, sessionId);
-            
+
             List<String> unlocked = new ArrayList<>();
             List<String> failed = new ArrayList<>();
-            
+
             for (Map.Entry<String, Boolean> entry : releaseResults.entrySet()) {
                 String seatId = entry.getKey();
                 boolean released = entry.getValue();
-                
+
                 if (released) {
-                    // También liberar en memoria local para compatibilidad
                     try {
                         seatLockService.unlockIfOwner(eventoId, seatId, sessionId);
                     } catch (Exception ex) {
-                        log.warn("Error en unlock de memoria local para {}: {}", seatId, ex.getMessage());
+                        log.warn("Error desbloqueando en memoria local para asiento {}: {}", seatId, ex.getMessage());
                     }
                     unlocked.add(seatId);
                 } else {
@@ -1079,7 +747,7 @@ public class AsientosController {
             response.put("unlocked", unlocked);
             response.put("failed", failed);
             response.put("totalUnlocked", unlocked.size());
-            
+
             if (unlocked.isEmpty()) {
                 response.put("result", "none_unlocked");
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
@@ -1090,20 +758,16 @@ public class AsientosController {
                 response.put("result", "partial_unlocked");
                 return ResponseEntity.ok(response);
             }
-            
+
         } catch (Exception ex) {
-            log.error("Error unlockMultipleSeats: {}", ex.getMessage(), ex);
+            log.error("Error desbloqueando múltiples asientos: {}", ex.getMessage(), ex);
             Map<String, Object> err = new HashMap<>();
             err.put("error", "internal");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);
         }
     }
 
-    /**
-     * Convierte seatId formato "r2c10" a Map con fila/columna para cátedra
-     * @param seatId formato "r2c10" 
-     * @return Map con "fila":2, "columna":10 o null si no parseable
-     */
+
     private Map<String, Object> parseSeatId(String seatId) {
         try {
             // Pattern para r{fila}c{columna}
@@ -1130,7 +794,7 @@ public class AsientosController {
 
 
     // GET /asientos/{eventoId}/{seatId}
-    @GetMapping("/{eventoId}/{seatId}/state")
+    @GetMapping("/asientos/{eventoId}/{seatId}/state")
     public ResponseEntity<Map<String,Object>> getSeatState(@PathVariable String eventoId,
                                                         @PathVariable String seatId,
                                                         @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {

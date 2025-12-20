@@ -25,6 +25,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.List
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 
 class EventsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -129,19 +134,63 @@ fun EventsScreen(vm: EventsViewModel, onEventClick: (Long) -> Unit) {
 
 @Composable
 private fun EventCard(e: EventSummary, onClick: () -> Unit) {
-    Card(modifier = Modifier
-        .fillMaxWidth()
-        .padding(6.dp)
-        .clickable { onClick() }) {
+    val colorFondo = getColorForEvent("evento_${e.id}") // Genera colores según el evento
+    val imagen = when ("evento_${e.id}") {
+        "evento_1" -> "https://thumbs.dreamstime.com/z/icono-del-calendario-de-los-eventos-simple-vector-122490231.jpg?ct=jpeg"
+        "evento_2" -> "https://thumbs.dreamstime.com/z/icono-del-calendario-de-los-eventos-simple-vector-122490231.jpg?ct=jpeg" 
+        else -> e.image
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(6.dp)
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = colorFondo)
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(text = e.title, style = MaterialTheme.typography.titleMedium)
+            // Renderizar la imagen (si no existe, usar imagen predeterminada)
+            AsyncImage(
+                model = imagen,
+                contentDescription = "Imagen del evento",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp) // Ajustar el tamaño según necesidad
+                    .clip(MaterialTheme.shapes.medium),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = e.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
             Spacer(modifier = Modifier.height(4.dp))
             Text(text = formatDateTime(e.dateTime), style = MaterialTheme.typography.bodySmall)
             Spacer(modifier = Modifier.height(4.dp))
-            Text(text = "Precio: $${String.format("%.2f", e.price)}", style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = "Precio: $${String.format("%.2f", e.price)}",
+                style = MaterialTheme.typography.bodySmall
+            )
             Spacer(modifier = Modifier.height(6.dp))
-            Text(text = "Disponibles: ${e.availableSeats}")
+            Text(
+                text = "Asientos totales: ${e.availableSeats}",
+                style = MaterialTheme.typography.bodySmall
+            )
         }
+    }
+}
+
+@Composable
+private fun getColorForEvent(evento: String): Color {
+    return when (evento) {
+        "evento_1" -> Color(0xFFFFCDD2) // Rojo pastel claro
+        "evento_2" -> Color(0xFFFFF9C4) // Amarillo pastel claro
+        "evento_3" -> Color(0xFFC8E6C9) // Verde pastel claro
+        "evento_4" -> Color(0xFFE1F5FE) // Azul pastel claro
+        "evento_5" -> Color(0xFFFFE0B2) // Naranja pastel claro
+        else -> Color(0xFFF5F5F5)       // Gris claro como fallback
     }
 }
 
@@ -153,7 +202,7 @@ private fun formatDateTime(dateTimeStr: String): String {
             dateTimeStr.contains("-") -> SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
             else -> return dateTimeStr // Si no coincide con ningún formato, devolver original
         }
-        
+
         val outputFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
         val date = inputFormat.parse(dateTimeStr)
         date?.let { outputFormat.format(it) } ?: dateTimeStr
