@@ -12,12 +12,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.*;
 
-/**
- * Servicio simple en memoria para locks y estado "sold".
- * - key: "<eventoId>:<seatId>"
- * TTL bloqueo: 5 minutos.
- * Cleaner periódico elimina locks expirados.
- */
+
 
 @Service
 public class SeatLockService {
@@ -71,29 +66,6 @@ public class SeatLockService {
             this.ownerSessionId = owner;
         }
     }
-
-    // public synchronized BlockResult tryBlock(int eventoId, String seatId, String sessionId) {
-    //     String k = key(eventoId, seatId);
-    //     if (sold.containsKey(k)) {
-    //         return new BlockResult(BlockResultType.SOLD, null);
-    //     }
-    //     LockInfo cur = locks.get(k);
-    //     long now = Instant.now().getEpochSecond();
-    //     if (cur == null || cur.expireAt <= now) {
-    //         long expire = now + TTL_SECONDS;
-    //         locks.put(k, new LockInfo(sessionId, expire));
-    //         return new BlockResult(BlockResultType.SUCCESS, sessionId);
-    //     } else {
-    //         if (cur.sessionId.equals(sessionId)) {
-    //             // refresh TTL
-    //             cur.expireAt = now + TTL_SECONDS;
-    //             locks.put(k, cur);
-    //             return new BlockResult(BlockResultType.ALREADY_LOCKED_BY_ME, cur.sessionId);
-    //         } else {
-    //             return new BlockResult(BlockResultType.LOCKED_BY_OTHER, cur.sessionId);
-    //         }
-    //     }
-    // }
 
     public synchronized BlockResult tryBlock(int eventoId, String seatId, String sessionId) {
     String k = key(eventoId, seatId);
@@ -165,12 +137,7 @@ public class SeatLockService {
         }
     }
 
-    /**
-     * Compra: succeeds if either:
-     *  - seat libre -> marcar sold
-     *  - seat locked por misma session -> vender y remover lock
-     * otherwise fail.
-     */
+
     public synchronized PurchaseResult purchase(int eventoId, String seatId, String sessionId) {
         String k = key(eventoId, seatId);
         if (sold.containsKey(k)) {

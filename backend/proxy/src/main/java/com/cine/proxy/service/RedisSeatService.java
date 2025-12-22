@@ -48,7 +48,7 @@ public class RedisSeatService {
         
         log.info("Reading seats from Redis key: {}", key);
 
-        // DEBUG: Verificar configuración de Redis
+        // info: Verificar configuración de Redis
         try {
             log.info("Redis connection factory: {}", redis.getConnectionFactory().getClass().getSimpleName());
             log.info("Trying to read key {} from Redis...", key);
@@ -61,8 +61,8 @@ public class RedisSeatService {
             Set<String> eventoKeys = redis.keys("evento*");
             log.info("All evento* keys in Redis: {}", eventoKeys);
             
-        } catch (Exception debugEx) {
-            log.error("Error in Redis debug: {}", debugEx.getMessage());
+        } catch (Exception infoEx) {
+            log.error("Error in Redis info: {}", infoEx.getMessage());
         }
 
         // Primero intentar leer como JSON string (formato actual en Redis)
@@ -226,7 +226,7 @@ public class RedisSeatService {
                     // legacy fields left blank here; expira will be set only for BLOQUEADO below
                 }
             } catch (Exception ex) {
-                log.debug("No se pudo derivar fila/columna desde seatId {}: {}", field, ex.getMessage());
+                log.info("No se pudo derivar fila/columna desde seatId {}: {}", field, ex.getMessage());
             }
 
             // modern fields: always set updatedAt info
@@ -416,373 +416,6 @@ public class RedisSeatService {
         }
     }
 
-    public boolean tryBlockSeatWithTTL(String eventoId, String seatId, String sessionId) {
-        try {
-            String key = keyForEvento(eventoId);
-            // zona local (GMT-3)
-            java.time.ZoneId zone = java.time.ZoneId.of("America/Argentina/Buenos_Aires");
-            java.time.ZonedDateTime nowZ = java.time.ZonedDateTime.now(zone);
-            java.time.ZonedDateTime expireZ = nowZ.plusMinutes(5); // TTL = 5 minutos
-            java.time.Instant nowInstant = java.time.Instant.now();
-
-            // Leer el JSON del evento (si no existe, construir estructura mínima)
-            String eventJson = redis.opsForValue().get(key);
-            com.fasterxml.jackson.databind.node.ObjectNode root;
-            com.fasterxml.jackson.databind.node.ArrayNode arr;
-
-            if (eventJson == null || eventJson.isBlank()) {
-                root = mapper.createObjectNode();
-                try { root.put("eventoId", Integer.parseInt(eventoId)); } catch (NumberFormatException ignore) {}
-                arr = mapper.createArrayNode();
-            } else {
-                com.fasterxml.jackson.databind.JsonNode parsed = mapper.readTree(eventJson);
-                if (parsed.isObject()) {
-                    root = (com.fasterxml.jackson.databind.node.ObjectNode) parsed;
-                } else {
-                    root = mapper.createObjectNode();
-                    try { root.put("eventoId", Integer.parseInt(eventoId)); } catch (NumberFormatException ignore) {}
-                }
-                com.fasterxml.jackson.databind.JsonNode seatsNode = root.path("asientos");
-                if (seatsNode.isArray()) {
-                    arr = (com.fasterxml.jackson.databind.node.ArrayNode) seatsNode;
-                } else {
-                    arr = mapper.createArrayNode();
-                }
-            }
-
-            // Buscar índice del asiento por seatId o por fila/columna
-            int foundIndex = -1;
-            for (int i = 0; i < arr.size(); i++) {
-                com.fasterxml.jackson.databind.JsonNode n = arr.get(i);
-                com.fasterxml.jackson.databind.JsonNode sid = n.path("seatId");
-                if (sid != null && sid.isTextual() && seatId.equals(sid.asText())) {
-                    foundIndex = i;
-                    break;
-                }
-                com.fasterxml.jackson.databind.JsonNode fNode = n.path("fila");
-                com.fasterxml.jackson.databind.JsonNode cNode = n.path("columna");
-                if (fNode.isInt() && cNode.isInt()) {
-                    String cand = "r" + fNode.asInt() + "c" + cNode.asInt();
-                    if (cand.equals(seatId)) {
-                        foundIndex = i;
-                        break;
-                    }
-                }
-            }
-
-            // Si existe asiento y está vendido -> no se puede bloquear
-            if (foundIndex >= 0) {
-                com.fasterxml.jackson.databind.JsonNode existing = arr.get(foundIndex);
-                // comprobar estado vendido: 'status' o legacy 'estado'
-                String statusTxt = existing.path("status").asText(null);
-                String estadoTxt = existing.path("estado").asText(null);
-                boolean sold = (statusTxt != null && "VENDIDO".equalsIgnoreCase(statusTxt))
-                        || ("Vendido".equalsIgnoreCase(estadoTxt));
-                if (sold) return false;
-
-                // comprobar bloqueo vigente por otro (usar expiraEpoch si está presente)
-                com.fasterxml.jackson.databind.JsonNode holderNode = existing.path("holder");
-                com.fasterxml.jackson.databind.JsonNode expEpochNode = existing.path("expiraEpoch");
-                com.fasterxml.jackson.databind.JsonNode expNode = existing.path("expira");
-
-                if (expEpochNode.isNumber()) {
-                    long expEpoch = expEpochNode.asLong();
-                    if (expEpoch > nowInstant.getEpochSecond() && holderNode.isTextual() && !sessionId.equals(holderNode.asText())) {
-                        return false;
-                    }
-                } else if (expNode.isTextual() && holderNode.isTextual()) {
-                    try {
-                        java.time.Instant exp = java.time.OffsetDateTime.parse(expNode.asText()).toInstant();
-                        if (exp.isAfter(nowInstant) && !sessionId.equals(holderNode.asText())) {
-                            return false;
-                        }
-                    } catch (Exception ex) {
-                        if (holderNode.isTextual() && !sessionId.equals(holderNode.asText())) {
-                            return false;
-                        }
-                    }
-                } else if (holderNode.isTextual() && !sessionId.equals(holderNode.asText())) {
-                    // sin campo expira pero con holder distinto -> considerar ocupado
-                    return false;
-                }
-            }
-
-            // Construir nodo actualizado (solo con campos necesarios)
-            com.fasterxml.jackson.databind.node.ObjectNode updatedNode = mapper.createObjectNode();
-            try {
-                if (seatId != null && seatId.startsWith("r") && seatId.contains("c")) {
-                    String[] parts = seatId.substring(1).split("c", 2);
-                    int fila = Integer.parseInt(parts[0]);
-                    int columna = Integer.parseInt(parts[1]);
-                    updatedNode.put("fila", fila);
-                    updatedNode.put("columna", columna);
-                    updatedNode.put("estado", "Bloqueado"); // legacy field
-                    updatedNode.put("expira", expireZ.format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME));
-                    updatedNode.put("expiraEpoch", expireZ.toInstant().getEpochSecond()); // epoch seconds
-                }
-            } catch (Exception ex) {
-                log.debug("No se pudo derivar fila/columna desde seatId {}: {}", seatId, ex.getMessage());
-            }
-
-            updatedNode.put("seatId", seatId);
-            updatedNode.put("status", "BLOQUEADO");
-            updatedNode.put("holder", sessionId != null ? sessionId : "");
-            updatedNode.put("updatedAt", nowZ.format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME));
-            updatedNode.put("updatedAtEpoch", nowInstant.getEpochSecond());
-
-            if (foundIndex >= 0) {
-                // Merge with existing to avoid losing comprador u otros campos
-                com.fasterxml.jackson.databind.node.ObjectNode existingNode = (com.fasterxml.jackson.databind.node.ObjectNode) arr.get(foundIndex);
-                com.fasterxml.jackson.databind.node.ObjectNode merged = existingNode.deepCopy();
-
-                // apply updatedNode fields
-                if (updatedNode.has("estado")) merged.set("estado", updatedNode.get("estado"));
-                if (updatedNode.has("expira")) merged.set("expira", updatedNode.get("expira"));
-                if (updatedNode.has("expiraEpoch")) merged.set("expiraEpoch", updatedNode.get("expiraEpoch"));
-
-                merged.put("seatId", seatId);
-                merged.set("status", updatedNode.get("status"));
-                merged.set("holder", updatedNode.get("holder"));
-                merged.set("updatedAt", updatedNode.get("updatedAt"));
-                merged.set("updatedAtEpoch", updatedNode.get("updatedAtEpoch"));
-
-                // preserve comprador if present in existingNode (do not remove)
-                if (existingNode.has("comprador") && !existingNode.get("comprador").isNull()) {
-                    merged.set("comprador", existingNode.get("comprador"));
-                    if (existingNode.has("fechaVenta")) merged.set("fechaVenta", existingNode.get("fechaVenta"));
-                }
-
-                arr.set(foundIndex, merged);
-            } else {
-                arr.add(updatedNode);
-            }
-
-            root.set("asientos", arr);
-
-            // Escribir de vuelta el evento completo (NO crear claves nuevas)
-            String newEventJson = mapper.writeValueAsString(root);
-            redis.opsForValue().set(key, newEventJson);
-
-            return true;
-
-        } catch (Exception e) {
-            log.error("Error bloqueando asiento {} en evento {}: {}", seatId, eventoId, e.getMessage(), e);
-            return false;
-        }
-    }
-
-
-    // public void upsertSeatWithTimestamp(String eventoId, Seat incoming) {
-    //     try {
-    //         String key = keyForEvento(eventoId);
-    //         String field = incoming.getSeatId();
-
-    //         // zona local (GMT-3). Cambiar si necesitás otra zona.
-    //         java.time.ZoneId zone = java.time.ZoneId.of("America/Argentina/Buenos_Aires");
-
-    //         // ensure incoming has an updatedAt timestamp we can compare/use
-    //         java.time.Instant nowInstant = java.time.Instant.now();
-    //         if (incoming.getUpdatedAt() == null) {
-    //             incoming.setUpdatedAt(nowInstant);
-    //         }
-    //         java.time.ZonedDateTime updatedZ = java.time.ZonedDateTime.ofInstant(incoming.getUpdatedAt(), zone);
-
-    //         // read existing event JSON (string) -- we will update the "asientos" array in-place
-    //         String eventJson = redis.opsForValue().get(key);
-    //         com.fasterxml.jackson.databind.node.ObjectNode root;
-    //         com.fasterxml.jackson.databind.node.ArrayNode arr;
-
-    //         if (eventJson == null || eventJson.isBlank()) {
-    //             // build a minimal event structure
-    //             root = mapper.createObjectNode();
-    //             try {
-    //                 root.put("eventoId", Integer.parseInt(eventoId));
-    //             } catch (NumberFormatException ignore) { /* no-op */ }
-    //             arr = mapper.createArrayNode();
-    //         } else {
-    //             // parse existing event JSON
-    //             com.fasterxml.jackson.databind.JsonNode parsed = mapper.readTree(eventJson);
-    //             if (parsed.isObject()) {
-    //                 root = (com.fasterxml.jackson.databind.node.ObjectNode) parsed;
-    //             } else {
-    //                 // if the stored value is not an object, replace with a fresh object
-    //                 root = mapper.createObjectNode();
-    //                 try {
-    //                     root.put("eventoId", Integer.parseInt(eventoId));
-    //                 } catch (NumberFormatException ignore) { /* no-op */ }
-    //             }
-    //             com.fasterxml.jackson.databind.JsonNode seatsNode = root.path("asientos");
-    //             if (seatsNode.isArray()) {
-    //                 arr = (com.fasterxml.jackson.databind.node.ArrayNode) seatsNode;
-    //             } else {
-    //                 arr = mapper.createArrayNode();
-    //             }
-    //         }
-
-    //         // build the seat node that is compatible with both legacy and modern consumers
-    //         com.fasterxml.jackson.databind.node.ObjectNode seatNode = mapper.createObjectNode();
-
-    //         // Try to derive fila/columna from seatId (format "r<fila>c<col>")
-    //         try {
-    //             String s = field; // e.g. "r6c5"
-    //             if (s != null && s.startsWith("r") && s.contains("c")) {
-    //                 String[] parts = s.substring(1).split("c", 2);
-    //                 int fila = Integer.parseInt(parts[0]);
-    //                 int columna = Integer.parseInt(parts[1]);
-    //                 seatNode.put("fila", fila);
-    //                 seatNode.put("columna", columna);
-    //                 // legacy fields left blank here; expira will be set only for BLOQUEADO below
-    //             }
-    //         } catch (Exception ex) {
-    //             log.debug("No se pudo derivar fila/columna desde seatId {}: {}", field, ex.getMessage());
-    //         }
-
-    //         // modern fields: always set updatedAt info
-    //         seatNode.put("seatId", field);
-    //         seatNode.put("updatedAt", updatedZ.format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME));
-    //         seatNode.put("updatedAtEpoch", incoming.getUpdatedAt().getEpochSecond());
-    //         if (incoming.getHolder() != null) {
-    //             seatNode.put("holder", incoming.getHolder());
-    //         } else {
-    //             seatNode.put("holder", "");
-    //         }
-    //         if (incoming.getStatus() != null) {
-    //             seatNode.put("status", incoming.getStatus());
-    //         }
-
-    //         // If incoming indicates a BLOQUEO, set legacy and expiration fields (5 minutes TTL from updatedAt)
-    //         if (incoming.getStatus() != null && "BLOQUEADO".equalsIgnoreCase(incoming.getStatus())) {
-    //             java.time.ZonedDateTime expZ = java.time.ZonedDateTime.ofInstant(incoming.getUpdatedAt(), zone).plusMinutes(5);
-    //             seatNode.put("estado", "Bloqueado");
-    //             seatNode.put("expira", expZ.format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME));
-    //             seatNode.put("expiraEpoch", expZ.toInstant().getEpochSecond());
-    //         }
-
-    //         // find existing seat entry in arr by seatId or by fila/columna
-    //         boolean replaced = false;
-    //         for (int i = 0; i < arr.size(); i++) {
-    //             com.fasterxml.jackson.databind.JsonNode existing = arr.get(i);
-    //             com.fasterxml.jackson.databind.JsonNode sid = existing.path("seatId");
-    //             if (sid != null && sid.isTextual() && field.equals(sid.asText())) {
-    //                 // optional: compare timestamps to avoid overwriting newer info
-    //                 com.fasterxml.jackson.databind.JsonNode upd = existing.path("updatedAt");
-    //                 if (upd.isTextual()) {
-    //                     try {
-    //                         java.time.Instant existingTs = java.time.Instant.parse(upd.asText());
-    //                         if (!incoming.getUpdatedAt().isBefore(existingTs)) {
-    //                             arr.set(i, seatNode);
-    //                         }
-    //                     } catch (Exception ex) {
-    //                         // if parse fails, replace
-    //                         arr.set(i, seatNode);
-    //                     }
-    //                 } else {
-    //                     arr.set(i, seatNode);
-    //                 }
-    //                 replaced = true;
-    //                 break;
-    //             }
-
-    //             // fallback: match by fila/columna if present in node
-    //             com.fasterxml.jackson.databind.JsonNode fNode = existing.path("fila");
-    //             com.fasterxml.jackson.databind.JsonNode cNode = existing.path("columna");
-    //             if (!replaced && fNode.isInt() && cNode.isInt()) {
-    //                 String cand = "r" + fNode.asInt() + "c" + cNode.asInt();
-    //                 if (cand.equals(field)) {
-    //                     // same timestamp check as above
-    //                     com.fasterxml.jackson.databind.JsonNode upd = existing.path("updatedAt");
-    //                     if (upd.isTextual()) {
-    //                         try {
-    //                             java.time.Instant existingTs = java.time.Instant.parse(upd.asText());
-    //                             if (!incoming.getUpdatedAt().isBefore(existingTs)) {
-    //                                 arr.set(i, seatNode);
-    //                             }
-    //                         } catch (Exception ex) {
-    //                             arr.set(i, seatNode);
-    //                         }
-    //                     } else {
-    //                         arr.set(i, seatNode);
-    //                     }
-    //                     replaced = true;
-    //                     break;
-    //                 }
-    //             }
-    //         }
-
-    //         if (!replaced) {
-    //             arr.add(seatNode);
-    //         }
-
-    //         root.set("asientos", arr);
-
-    //         // write back the whole event JSON (no new keys created)
-    //         String newEventJson = mapper.writeValueAsString(root);
-    //         redis.opsForValue().set(key, newEventJson);
-
-    //     } catch (Exception e) {
-    //         throw new RuntimeException("Failed to upsert seat with timestamp in Redis", e);
-    //     }
-    // }
-    // Helper that reads the holder/owner for a seat from evento_<id> (returns null if none)
-    public String getSeatHolder(String eventoId, String seatId) {
-        try {
-            String key = keyForEvento(eventoId);
-            String eventJson = redis.opsForValue().get(key);
-            if (eventJson == null || eventJson.isBlank()) return null;
-            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(eventJson);
-            com.fasterxml.jackson.databind.JsonNode seats = root.path("asientos");
-            if (!seats.isArray()) return null;
-            for (com.fasterxml.jackson.databind.JsonNode sn : seats) {
-                com.fasterxml.jackson.databind.JsonNode sid = sn.path("seatId");
-                if (sid != null && sid.isTextual() && seatId.equals(sid.asText())) {
-                    com.fasterxml.jackson.databind.JsonNode holder = sn.path("holder");
-                    return holder.isTextual() ? holder.asText() : null;
-                }
-                // fallback by fila/col
-                com.fasterxml.jackson.databind.JsonNode fNode = sn.path("fila");
-                com.fasterxml.jackson.databind.JsonNode cNode = sn.path("columna");
-                if (fNode.isInt() && cNode.isInt()) {
-                    String cand = "r" + fNode.asInt() + "c" + cNode.asInt();
-                    if (cand.equals(seatId)) {
-                        com.fasterxml.jackson.databind.JsonNode holder = sn.path("holder");
-                        return holder.isTextual() ? holder.asText() : null;
-                    }
-                }
-            }
-            return null;
-        } catch (Exception e) {
-            log.warn("Failed to read seat holder for {}:{} -> {}", eventoId, seatId, e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * SISTEMA DE BLOQUEO TEMPORAL CON TTL
-     * 
-     * Flujo de bloqueo:
-     * 1. Verificar si asiento está libre en Redis
-     * 2. Si está libre, crear bloqueo temporal (TTL=5 minutos)  
-     * 3. Marcar asiento como "BLOQUEADO" en Redis
-     * 4. Si TTL expira, asiento vuelve a "LIBRE" automáticamente
-     * 
-     * Claves Redis:
-     * - evento_{eventoId} : hash con asientos permanentes
-     * - seat_lock:{eventoId}:{seatId} : string con TTL para bloqueo temporal
-     */
-    
-    private String lockKeyForSeat(String eventoId, String seatId) {
-        return "seat_lock:" + eventoId + ":" + seatId;
-    }
-
-    /**
-     * Intenta bloquear un asiento temporalmente (TTL=5 minutos).
-     * 
-     * @param eventoId ID del evento
-     * @param seatId ID del asiento  
-     * @param sessionId ID de la sesión que bloquea
-     * @return true si se bloqueó exitosamente, false si ya estaba bloqueado/vendido
-     */
-    
     // public boolean tryBlockSeatWithTTL(String eventoId, String seatId, String sessionId) {
     //     try {
     //         String key = keyForEvento(eventoId);
@@ -874,10 +507,8 @@ public class RedisSeatService {
     //             }
     //         }
 
-    //         // Construir nodo actualizado del asiento (legacy + moderno)
+    //         // Construir nodo actualizado (solo con campos necesarios)
     //         com.fasterxml.jackson.databind.node.ObjectNode updatedNode = mapper.createObjectNode();
-
-    //         // intentar derivar fila/columna desde seatId (ej: "r6c5")
     //         try {
     //             if (seatId != null && seatId.startsWith("r") && seatId.contains("c")) {
     //                 String[] parts = seatId.substring(1).split("c", 2);
@@ -886,24 +517,42 @@ public class RedisSeatService {
     //                 updatedNode.put("fila", fila);
     //                 updatedNode.put("columna", columna);
     //                 updatedNode.put("estado", "Bloqueado"); // legacy field
-    //                 // guardar expira en la zona local con offset (ej: -03:00)
     //                 updatedNode.put("expira", expireZ.format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME));
     //                 updatedNode.put("expiraEpoch", expireZ.toInstant().getEpochSecond()); // epoch seconds
     //             }
     //         } catch (Exception ex) {
-    //             log.debug("No se pudo derivar fila/columna desde seatId {}: {}", seatId, ex.getMessage());
+    //             log.info("No se pudo derivar fila/columna desde seatId {}: {}", seatId, ex.getMessage());
     //         }
 
-    //         // campos modernos: guardar updatedAt con zona local y epoch
     //         updatedNode.put("seatId", seatId);
     //         updatedNode.put("status", "BLOQUEADO");
     //         updatedNode.put("holder", sessionId != null ? sessionId : "");
     //         updatedNode.put("updatedAt", nowZ.format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME));
     //         updatedNode.put("updatedAtEpoch", nowInstant.getEpochSecond());
 
-    //         // Reemplazar o añadir en el array
     //         if (foundIndex >= 0) {
-    //             arr.set(foundIndex, updatedNode);
+    //             // Merge with existing to avoid losing comprador u otros campos
+    //             com.fasterxml.jackson.databind.node.ObjectNode existingNode = (com.fasterxml.jackson.databind.node.ObjectNode) arr.get(foundIndex);
+    //             com.fasterxml.jackson.databind.node.ObjectNode merged = existingNode.deepCopy();
+
+    //             // apply updatedNode fields
+    //             if (updatedNode.has("estado")) merged.set("estado", updatedNode.get("estado"));
+    //             if (updatedNode.has("expira")) merged.set("expira", updatedNode.get("expira"));
+    //             if (updatedNode.has("expiraEpoch")) merged.set("expiraEpoch", updatedNode.get("expiraEpoch"));
+
+    //             merged.put("seatId", seatId);
+    //             merged.set("status", updatedNode.get("status"));
+    //             merged.set("holder", updatedNode.get("holder"));
+    //             merged.set("updatedAt", updatedNode.get("updatedAt"));
+    //             merged.set("updatedAtEpoch", updatedNode.get("updatedAtEpoch"));
+
+    //             // preserve comprador if present in existingNode (do not remove)
+    //             if (existingNode.has("comprador") && !existingNode.get("comprador").isNull()) {
+    //                 merged.set("comprador", existingNode.get("comprador"));
+    //                 if (existingNode.has("fechaVenta")) merged.set("fechaVenta", existingNode.get("fechaVenta"));
+    //             }
+
+    //             arr.set(foundIndex, merged);
     //         } else {
     //             arr.add(updatedNode);
     //         }
@@ -922,6 +571,228 @@ public class RedisSeatService {
     //     }
     // }
 
+    public boolean tryBlockSeatWithTTL(String eventoId, String seatId, String sessionId) {
+        try {
+            String key = keyForEvento(eventoId); // Tipo: "evento_{eventId}"
+            java.time.ZoneId zone = java.time.ZoneId.of("America/Argentina/Buenos_Aires");
+            java.time.ZonedDateTime nowZ = java.time.ZonedDateTime.now(zone);
+            java.time.ZonedDateTime expireZ = nowZ.plusMinutes(5);
+            java.time.Instant nowInstant = java.time.Instant.now();
+
+            log.info("[info][BLOCK] ---------- NUEVA OPERACION BLOQUEO ----------");
+            log.info("[info][BLOCK] sessionId = {}", sessionId);
+            log.info("[info][BLOCK] eventoId = {}, seatId = {}", eventoId, seatId);
+            log.info("[info][BLOCK] Redis key a buscar: '{}'", key);
+
+            String eventJson = redis.opsForValue().get(key);
+            log.info("[info][BLOCK] JSON actual en Redis (key={}): {}", key, eventJson);
+
+            com.fasterxml.jackson.databind.node.ObjectNode root;
+            com.fasterxml.jackson.databind.node.ArrayNode arr;
+
+            if (eventJson == null || eventJson.isBlank()) {
+                // Solo si no existe, arma estructura (esto no crea clave en Redis aún, solo en memoria local)
+                log.info("[info][BLOCK] NO existía evento en Redis: armo estructura mínima.");
+                root = mapper.createObjectNode();
+                try { root.put("eventoId", Integer.parseInt(eventoId)); } catch (NumberFormatException ignore) {}
+                arr = mapper.createArrayNode();
+            } else {
+                log.info("[info][BLOCK] Evento encontrado en Redis, parseando...");
+                com.fasterxml.jackson.databind.JsonNode parsed = mapper.readTree(eventJson);
+                if (parsed.isObject()) {
+                    root = (com.fasterxml.jackson.databind.node.ObjectNode) parsed;
+                } else {
+                    log.info("[info][BLOCK] Valor en Redis NO es objeto, reset structure.");
+                    root = mapper.createObjectNode();
+                    try { root.put("eventoId", Integer.parseInt(eventoId)); } catch (NumberFormatException ignore) {}
+                }
+                com.fasterxml.jackson.databind.JsonNode seatsNode = root.path("asientos");
+                if (seatsNode.isArray()) {
+                    arr = (com.fasterxml.jackson.databind.node.ArrayNode) seatsNode;
+                } else {
+                    arr = mapper.createArrayNode();
+                }
+            }
+
+            log.info("[info][BLOCK] Asientos actuales (arr.size={}):", arr.size());
+            for (int i = 0; i < arr.size(); i++) {
+                log.info("[info][BLOCK] Asiento[{}]: {}", i, arr.get(i));
+            }
+
+            int foundIndex = -1;
+            for (int i = 0; i < arr.size(); i++) {
+                com.fasterxml.jackson.databind.JsonNode n = arr.get(i);
+                com.fasterxml.jackson.databind.JsonNode sid = n.path("seatId");
+                boolean match = false;
+                if (sid != null && sid.isTextual() && seatId.equals(sid.asText())) {
+                    foundIndex = i;
+                    match = true;
+                }
+                if (!match) {
+                    com.fasterxml.jackson.databind.JsonNode fNode = n.path("fila");
+                    com.fasterxml.jackson.databind.JsonNode cNode = n.path("columna");
+                    if (fNode.isInt() && cNode.isInt()) {
+                        String cand = "r" + fNode.asInt() + "c" + cNode.asInt();
+                        if (cand.equals(seatId)) {
+                            foundIndex = i;
+                        }
+                    }
+                }
+                log.info("[info][BLOCK] Iteracion {}: seatId {}, foundIndex={}, match={}", i, sid, foundIndex, match);
+            }
+
+            if (foundIndex >= 0) {
+                log.info("[info][BLOCK] Asiento YA EXISTE en evento (foundIndex={})", foundIndex);
+                com.fasterxml.jackson.databind.JsonNode existing = arr.get(foundIndex);
+
+                // Estado VENDIDO/legacy
+                String statusTxt = existing.path("status").asText(null);
+                String estadoTxt = existing.path("estado").asText(null);
+                boolean sold = (statusTxt != null && "VENDIDO".equalsIgnoreCase(statusTxt))
+                        || ("Vendido".equalsIgnoreCase(estadoTxt));
+                log.info("[info][BLOCK] Estado seat: status={}, estado={}, sold={}", statusTxt, estadoTxt, sold);
+                if (sold) {
+                    log.info("[info][BLOCK] Asiento ya VENDIDO, no se puede bloquear. RETURN false");
+                    return false;
+                }
+
+                // ¿Bloqueado por otro? (revisar expiración)
+                com.fasterxml.jackson.databind.JsonNode holderNode = existing.path("holder");
+                com.fasterxml.jackson.databind.JsonNode expEpochNode = existing.path("expiraEpoch");
+                com.fasterxml.jackson.databind.JsonNode expNode = existing.path("expira");
+                if (expEpochNode.isNumber()) {
+                    long expEpoch = expEpochNode.asLong();
+                    log.info("[info][BLOCK] expEpoch={}, ahora={}", expEpoch, nowInstant.getEpochSecond());
+                    if (expEpoch > nowInstant.getEpochSecond() && holderNode.isTextual() && !sessionId.equals(holderNode.asText())) {
+                        log.info("[info][BLOCK] Asiento BLOQUEADO por OTRO. RETURN false");
+                        return false;
+                    }
+                } else if (expNode.isTextual() && holderNode.isTextual()) {
+                    try {
+                        java.time.Instant exp = java.time.OffsetDateTime.parse(expNode.asText()).toInstant();
+                        log.info("[info][BLOCK] exp (iso)={}, ahora={}", exp, nowInstant);
+                        if (exp.isAfter(nowInstant) && !sessionId.equals(holderNode.asText())) {
+                            log.info("[info][BLOCK] Asiento BLOQUEADO por OTRO. RETURN false");
+                            return false;
+                        }
+                    } catch (Exception ex) {
+                        if (holderNode.isTextual() && !sessionId.equals(holderNode.asText())) {
+                            log.info("[info][BLOCK] Error parseando expNode, pero holder es OTRO. RETURN false");
+                            return false;
+                        }
+                    }
+                } else if (holderNode.isTextual() && !sessionId.equals(holderNode.asText())) {
+                    log.info("[info][BLOCK] Asiento BLOQUEADO por OTRO (sin expira explícito). RETURN false");
+                    return false;
+                }
+            }
+
+            log.info("[info][BLOCK] Asiento DISPONIBLE: se procederá a bloquearlo con holder={} por 5min", sessionId);
+
+            // Nodo actualizado para el asiento
+            com.fasterxml.jackson.databind.node.ObjectNode updatedNode = mapper.createObjectNode();
+            try {
+                if (seatId != null && seatId.startsWith("r") && seatId.contains("c")) {
+                    String[] parts = seatId.substring(1).split("c", 2);
+                    int fila = Integer.parseInt(parts[0]);
+                    int columna = Integer.parseInt(parts[1]);
+                    updatedNode.put("fila", fila);
+                    updatedNode.put("columna", columna);
+                    updatedNode.put("estado", "Bloqueado");
+                    updatedNode.put("expira", expireZ.format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+                    updatedNode.put("expiraEpoch", expireZ.toInstant().getEpochSecond());
+                }
+            } catch (Exception ex) {
+                log.info("No se pudo derivar fila/columna desde seatId {}: {}", seatId, ex.getMessage());
+            }
+
+            updatedNode.put("seatId", seatId);
+            updatedNode.put("status", "BLOQUEADO");
+            updatedNode.put("holder", sessionId != null ? sessionId : "");
+            updatedNode.put("updatedAt", nowZ.format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+            updatedNode.put("updatedAtEpoch", nowInstant.getEpochSecond());
+
+            // MERGE O CREAR
+            if (foundIndex >= 0) {
+                log.info("[info][BLOCK] Modo MERGE: actualizando asiento en arr[{}]", foundIndex);
+                com.fasterxml.jackson.databind.node.ObjectNode existingNode = (com.fasterxml.jackson.databind.node.ObjectNode) arr.get(foundIndex);
+                com.fasterxml.jackson.databind.node.ObjectNode merged = existingNode.deepCopy();
+                // Mergeo sólo campos actualizables
+                if (updatedNode.has("estado")) merged.set("estado", updatedNode.get("estado"));
+                if (updatedNode.has("expira")) merged.set("expira", updatedNode.get("expira"));
+                if (updatedNode.has("expiraEpoch")) merged.set("expiraEpoch", updatedNode.get("expiraEpoch"));
+                merged.put("seatId", seatId);
+                merged.set("status", updatedNode.get("status"));
+                merged.set("holder", updatedNode.get("holder"));
+                merged.set("updatedAt", updatedNode.get("updatedAt"));
+                merged.set("updatedAtEpoch", updatedNode.get("updatedAtEpoch"));
+
+                // Preserva info comprador
+                if (existingNode.has("comprador") && !existingNode.get("comprador").isNull()) {
+                    merged.set("comprador", existingNode.get("comprador"));
+                    if (existingNode.has("fechaVenta")) merged.set("fechaVenta", existingNode.get("fechaVenta"));
+                }
+
+                arr.set(foundIndex, merged);
+                log.info("[info][BLOCK] After MERGE nodo actualizado: {}", merged);
+            } else {
+                log.info("[info][BLOCK] Asiento NO EXISTÍA: agregando como NUEVO nodo");
+                arr.add(updatedNode);
+                log.info("[info][BLOCK] Nuevo nodo: {}", updatedNode);
+            }
+
+            root.set("asientos", arr);
+
+            String newEventJson = mapper.writeValueAsString(root);
+            log.info("[info][BLOCK] Evento final a persistir en Redis (key={}): {}", key, newEventJson);
+
+            redis.opsForValue().set(key, newEventJson);
+
+            log.info("[info][BLOCK] Operación EXITOSA: asiento {} bloqueado por session {} hasta {}", seatId, sessionId, expireZ);
+
+            return true;
+
+        } catch (Exception e) {
+            log.error("Error bloqueando asiento {} en evento {}: {}", seatId, eventoId, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    // Helper that reads the holder/owner for a seat from evento_<id> (returns null if none)
+    public String getSeatHolder(String eventoId, String seatId) {
+        try {
+            String key = keyForEvento(eventoId);
+            String eventJson = redis.opsForValue().get(key);
+            if (eventJson == null || eventJson.isBlank()) return null;
+            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(eventJson);
+            com.fasterxml.jackson.databind.JsonNode seats = root.path("asientos");
+            if (!seats.isArray()) return null;
+            for (com.fasterxml.jackson.databind.JsonNode sn : seats) {
+                com.fasterxml.jackson.databind.JsonNode sid = sn.path("seatId");
+                if (sid != null && sid.isTextual() && seatId.equals(sid.asText())) {
+                    com.fasterxml.jackson.databind.JsonNode holder = sn.path("holder");
+                    return holder.isTextual() ? holder.asText() : null;
+                }
+                // fallback by fila/col
+                com.fasterxml.jackson.databind.JsonNode fNode = sn.path("fila");
+                com.fasterxml.jackson.databind.JsonNode cNode = sn.path("columna");
+                if (fNode.isInt() && cNode.isInt()) {
+                    String cand = "r" + fNode.asInt() + "c" + cNode.asInt();
+                    if (cand.equals(seatId)) {
+                        com.fasterxml.jackson.databind.JsonNode holder = sn.path("holder");
+                        return holder.isTextual() ? holder.asText() : null;
+                    }
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            log.warn("Failed to read seat holder for {}:{} -> {}", eventoId, seatId, e.getMessage());
+            return null;
+        }
+    }
+
+
+
     
     /**
      * Verifica si un asiento está bloqueado temporalmente.
@@ -938,6 +809,11 @@ public class RedisSeatService {
             log.error("Error verificando bloqueo de asiento {}: {}", seatId, e.getMessage());
             return null;
         }
+    }
+
+    private String lockKeyForSeat(String eventoId, String seatId) {
+        // Elegí el formato que uses en el resto de tu código (por ejemplo:)
+        return "seatlock:" + eventoId + ":" + seatId;
     }
     
     /**
@@ -996,13 +872,13 @@ public class RedisSeatService {
 
                 // if no holder or holder!=session -> can't release
                 if (holder == null || holder.isBlank() || !holder.equals(sessionId)) {
-                    log.debug("releaseSeatLock: holder mismatch or absent for {}:{} (holder={}, requested={})", eventoId, seatId, holder, sessionId);
+                    log.info("releaseSeatLock: holder mismatch or absent for {}:{} (holder={}, requested={})", eventoId, seatId, holder, sessionId);
                     return false;
                 }
 
                 // if expired already, treat as not owned
                 if (expEpoch != 0 && expEpoch <= nowEpoch) {
-                    log.debug("releaseSeatLock: lock expired for {}:{} (expEpoch={})", eventoId, seatId, expEpoch);
+                    log.info("releaseSeatLock: lock expired for {}:{} (expEpoch={})", eventoId, seatId, expEpoch);
                     return false;
                 }
 
@@ -1024,7 +900,7 @@ public class RedisSeatService {
                 log.info("releaseSeatLock: released {}:{} by {}", eventoId, seatId, sessionId);
                 return true;
             } else {
-                log.debug("releaseSeatLock: no change (seat not found or not owned) for {}:{}", eventoId, seatId);
+                log.info("releaseSeatLock: no change (seat not found or not owned) for {}:{}", eventoId, seatId);
                 return false;
             }
         } catch (Exception e) {
@@ -1133,115 +1009,6 @@ public class RedisSeatService {
     }
 
 
-    /**
-     * FLUJO DE COMPRA CON BLOQUEO TEMPORAL PREVIO
-     * 
-     * Flujo de compra:
-     * 1. Verificar que el asiento esté bloqueado por el usuario que intenta comprar
-     * 2. Si está bloqueado correctamente, proceder con la venta
-     * 3. Marcar como "VENDIDO" y eliminar el bloqueo temporal
-     * 4. Si no está bloqueado por el usuario, rechazar la compra
-     * 
-     * IMPORTANTE: Este método asume que el usuario YA bloqueó el asiento previamente
-     * usando tryBlockSeatWithTTL(). NO permite compra directa sin bloqueo previo.
-     */
-    
-    /**
-     * Intenta comprar un asiento que previamente fue bloqueado por el usuario.
-     * 
-     * @param eventoId ID del evento
-     * @param seatId ID del asiento  
-     * @param sessionId ID de la sesión que intenta comprar
-     * @param persona Nombre completo del comprador
-     * @param apellido Parámetro ignorado (compatibilidad)
-     * @return true si la compra fue exitosa, false si no se pudo comprar
-     */
-
-    // Try to purchase a seat that must be blocked by the same sessionId (returns true on success)
-    // public boolean tryPurchaseBlockedSeat(String eventoId, String seatId, String sessionId, String persona, String extraInfo) {
-    //     try {
-    //         String key = keyForEvento(eventoId);
-    //         String eventJson = redis.opsForValue().get(key);
-    //         if (eventJson == null || eventJson.isBlank()) {
-    //             return false;
-    //         }
-
-    //         com.fasterxml.jackson.databind.node.ObjectNode root = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(eventJson);
-    //         com.fasterxml.jackson.databind.node.ArrayNode arr = root.withArray("asientos");
-
-    //         long nowEpoch = java.time.Instant.now().getEpochSecond();
-
-    //         for (int i = 0; i < arr.size(); i++) {
-    //             com.fasterxml.jackson.databind.node.ObjectNode node = (com.fasterxml.jackson.databind.node.ObjectNode) arr.get(i);
-    //             String sid = node.path("seatId").asText(null);
-    //             if (sid == null || sid.isBlank()) {
-    //                 com.fasterxml.jackson.databind.JsonNode fNode = node.path("fila");
-    //                 com.fasterxml.jackson.databind.JsonNode cNode = node.path("columna");
-    //                 if (fNode.isInt() && cNode.isInt()) {
-    //                     sid = "r" + fNode.asInt() + "c" + cNode.asInt();
-    //                 }
-    //             }
-    //             if (!seatId.equals(sid)) continue;
-
-    //             String holder = node.path("holder").asText(null);
-    //             long expEpoch = 0;
-    //             com.fasterxml.jackson.databind.JsonNode expEpochNode = node.path("expiraEpoch");
-    //             if (expEpochNode.isNumber()) expEpoch = expEpochNode.asLong();
-    //             else {
-    //                 String expIso = node.path("expira").asText(null);
-    //                 if (expIso != null) {
-    //                     try { expEpoch = java.time.OffsetDateTime.parse(expIso).toInstant().getEpochSecond(); }
-    //                     catch (Exception ex) { expEpoch = 0; }
-    //                 }
-    //             }
-
-    //             // must be locked by requester and not expired
-    //             if (holder == null || !holder.equals(sessionId)) {
-    //                 return false;
-    //             }
-    //             if (expEpoch != 0 && expEpoch <= nowEpoch) {
-    //                 return false;
-    //             }
-
-    //             // OK: mark as VENDIDO and attach buyer info
-    //             node.put("status", "VENDIDO");
-    //             node.put("estado", "Vendido");
-    //             com.fasterxml.jackson.databind.node.ObjectNode compradorNode = mapper.createObjectNode();
-    //             compradorNode.put("persona", persona != null ? persona : "");
-    //             compradorNode.put("fechaVenta", java.time.ZonedDateTime.now(java.time.ZoneId.of("America/Argentina/Buenos_Aires")).format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME));
-    //             node.set("comprador", compradorNode);
-    //             node.put("fechaVenta", compradorNode.path("fechaVenta").asText());
-    //             // remove holder/expiration
-    //             node.remove("holder");
-    //             node.remove("expira");
-    //             node.remove("expiraEpoch");
-    //             node.remove("updatedAt");
-    //             node.remove("updatedAtEpoch");
-
-    //             // persist
-    //             String newEventJson = mapper.writeValueAsString(root);
-    //             redis.opsForValue().set(key, newEventJson);
-
-    //             return true;
-    //         }
-
-    //         return false;
-    //     } catch (Exception e) {
-    //         log.error("tryPurchaseBlockedSeat error for {}:{} -> {}", eventoId, seatId, e.getMessage(), e);
-    //         return false;
-    //     }
-    // }
-
-    
-    /**
-     * Intenta bloquear un asiento para compra (con TTL=5 minutos).
-     * Este debe ser el PRIMER PASO antes de cualquier compra.
-     * 
-     * @param eventoId ID del evento
-     * @param seatId ID del asiento  
-     * @param sessionId ID de la sesión que quiere comprar
-     * @return true si se bloqueó para compra, false si no está disponible
-     */
     public boolean tryBlockSeatForPurchase(String eventoId, String seatId, String sessionId) {
         // Reutilizar la lógica existente de bloqueo temporal
         return tryBlockSeatWithTTL(eventoId, seatId, sessionId);

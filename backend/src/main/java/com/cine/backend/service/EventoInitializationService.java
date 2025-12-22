@@ -14,15 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * EventoInitializationService - Inicializa eventos en Redis desde datos de Cátedra.
- * 
- * Responsabilidades:
- * 1. Consultar evento completo desde Cátedra (/eventos/{id})
- * 2. Generar matriz completa de asientos usando filas x columnas  
- * 3. Persistir en Redis como evento_{id} con formato JSON esperado
- * 4. Evitar sobreescribir si ya existe (idempotente)
- */
+
 @Service
 public class EventoInitializationService {
 
@@ -43,12 +35,7 @@ public class EventoInitializationService {
         this.catedraBase = catedraBase;
     }
 
-    /**
-     * Inicializa un evento en Redis si no existe.
-     * 
-     * @param eventoId ID del evento a inicializar
-     * @return true si se inicializó o ya existía, false si hubo error
-     */
+
     @SuppressWarnings("unchecked")
     public boolean ensureEventoInitialized(String eventoId) {
         String redisKey = "evento_" + eventoId;

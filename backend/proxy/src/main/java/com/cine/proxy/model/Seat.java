@@ -4,11 +4,10 @@ import java.time.Instant;
 
 public class Seat {
     private String seatId;
-    private String status; // e.g. "LIBRE", "BLOQUEADO", "VENDIDO"
-    private String holder; // sessionId del usuario
+    private String status; 
+    private String holder; 
     private Instant updatedAt;
     
-    // Nuevos campos para datos del comprador
     private Comprador comprador;
     private String fechaVenta;
 
@@ -39,7 +38,6 @@ public class Seat {
     public String getFechaVenta() { return fechaVenta; }
     public void setFechaVenta(String fechaVenta) { this.fechaVenta = fechaVenta; }
     
-    // Clase interna para datos del comprador
     public static class Comprador {
         private String persona;
         

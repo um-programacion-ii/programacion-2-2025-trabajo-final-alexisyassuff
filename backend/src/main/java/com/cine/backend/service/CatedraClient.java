@@ -13,14 +13,14 @@ import reactor.core.publisher.Mono;
 public class CatedraClient {
 
     private static final Logger log = LoggerFactory.getLogger(CatedraClient.class);
-
     private final WebClient webClient;
 
     public CatedraClient(WebClient webClient, @Value("${catedra.base-url:http://localhost:8080}") String baseUrl) {
         this.webClient = webClient.mutate().baseUrl(baseUrl).build();
     }
 
-    public TokenResponse registerUser(Object payload) {
+
+    public TokenResponse callCatedraApi(Object payload) {
         try {
             log.info("Calling cátedra /api/v1/agregar_usuario with payload: {}", payload);
             Mono<TokenResponse> mono = webClient.post()
@@ -30,14 +30,14 @@ public class CatedraClient {
                     .bodyToMono(TokenResponse.class);
 
             TokenResponse resp = mono.block();
-            log.info("registerUser: parsed TokenResponse -> {}", resp);
+            log.info("Cátedra API response: {}", resp);
             return resp;
         } catch (WebClientResponseException we) {
             String body = we.getResponseBodyAsString();
             log.error("Cátedra returned error {} {}. Body: {}", we.getRawStatusCode(), we.getStatusText(), body);
             return null;
         } catch (Exception e) {
-            log.error("Error calling cátedra registerUser: {}", e.toString(), e);
+            log.error("Error calling cátedra: {}", e.toString(), e);
             return null;
         }
     }

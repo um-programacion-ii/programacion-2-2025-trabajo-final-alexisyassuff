@@ -7,7 +7,11 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-
+import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.http.ResponseEntity;
+import java.util.concurrent.ConcurrentHashMap;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
@@ -16,12 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-/**
- * TokenService:
- * - mantiene token en memoria (tokenRef)
- * - persiste token en Redis bajo la clave configurada (por defecto "catedra:token")
- * - intenta refresh vía refreshUrl (si está configurado)
- */
+
 @Service
 public class TokenService {
 
@@ -34,6 +33,31 @@ public class TokenService {
     private final ObjectMapper mapper = new ObjectMapper();
 
     private final String redisKey;
+
+
+    private static final Map<String, Instant> VALID_TOKENS = new ConcurrentHashMap<>();
+
+    public static void registerToken(String token, Instant expiresAt) {
+        VALID_TOKENS.put(token, expiresAt);
+    }
+    public static boolean isTokenValid(String token) {
+        Instant exp = VALID_TOKENS.get(token);
+        return exp != null && exp.isAfter(Instant.now());
+    }
+
+
+    @PostMapping("/register-token")
+    public ResponseEntity<?> registerToken(@RequestBody Map<String, Object> body) {
+        String token = (String) body.get("token");
+        String expiresAtStr = (String) body.get("expiresAt");
+        if (token == null || expiresAtStr == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "token and expiresAt required"));
+        }
+        Instant expiresAt = Instant.parse(expiresAtStr);
+        TokenService.registerToken(token, expiresAt);
+        System.out.println("[DEBUG] Token registrado: " + token + " expira: " + expiresAt);
+        return ResponseEntity.ok(Map.of("registered", true));
+    }
 
     public TokenService(CatedraProperties props, WebClient.Builder webClientBuilder, StringRedisTemplate redis) {
         this.props = props;
@@ -63,11 +87,9 @@ public class TokenService {
         }
     }
 
-    /** Devuelve el token actual en memoria (puede ser null) */
     public String getToken() {
         String token = tokenRef.get();
         
-        // Verificar si el token existe en Redis (si no existe, significa que expiró)
         if (token != null) {
             try {
                 String redisToken = redis.opsForValue().get(this.redisKey);
@@ -78,19 +100,16 @@ public class TokenService {
                 }
             } catch (Exception e) {
                 log.warn("Error checking token in Redis: {}", e.getMessage());
-                // En caso de error de Redis, mantener el token en memoria
             }
         }
         
         return token;
     }
     
-    /** Verifica si hay un token válido disponible */
     public boolean hasValidToken() {
         return getToken() != null;
     }
 
-    /** Setea el token en memoria y lo persiste en Redis con TTL máximo de 1 hora */
     public void setTokenAndPersist(String token) {
         tokenRef.set(token);
         try {
@@ -181,10 +200,8 @@ public class TokenService {
         }
     }
 
-    /**
-     * Attempts to refresh the token using configured refreshUrl and credentials.
-     * Returns true if token refreshed and persisted.
-     */
+
+
     public synchronized boolean refreshTokenIfPossible() {
         String refreshUrl = props.getRefreshUrl();
         if (refreshUrl == null || refreshUrl.isBlank()) {

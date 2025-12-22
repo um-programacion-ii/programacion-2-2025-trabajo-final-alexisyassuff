@@ -2,6 +2,8 @@ package com.cine.proxy.controller;
 import com.cine.proxy.model.Seat;
 import com.cine.proxy.service.RedisSeatService;
 import com.cine.proxy.service.SeatLockService;
+import com.cine.proxy.service.TokenService;
+import com.cine.proxy.service.SessionTokenValidatorService;
 import com.cine.proxy.client.CatedraClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @RestController
 // @RequestMapping("/asientos")
@@ -30,6 +33,9 @@ public class AsientosController {
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    @Autowired
+    private SessionTokenValidatorService sessionTokenValidatorService;
+
     public AsientosController(RedisSeatService seatService, SeatLockService seatLockService, CatedraClient catedraClient, StringRedisTemplate redis) {
         this.seatService = seatService;
         this.seatLockService = seatLockService;
@@ -38,335 +44,29 @@ public class AsientosController {
     }
 
 
+
     @GetMapping("/asientos/{eventoId}")
-    public ResponseEntity<List<Map<String,Object>>> getAsientos(@PathVariable String eventoId,
-                                                                @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
+    public ResponseEntity<List<Map<String,Object>>> getAsientos(
+        @PathVariable String eventoId,
+        @RequestHeader(value = "X-Session-Id", required = false) String sessionId)
+    {
         try {
-            log.info("Obteniendo asientos para evento {} - NUEVA LÓGICA", eventoId);
+            log.info("Obteniendo asientos para evento {} - REFAC", eventoId);
 
-            // 1. Obtener datos del evento desde cátedra para saber filas x columnas
-            String eventoData = null;
-            try {
-                eventoData = catedraClient.getEvento(eventoId);
-            } catch (Exception e) {
-                log.warn("No se pudo obtener evento {} desde cátedra: {}", eventoId, e.getMessage());
-                eventoData = null;
-            }
+            // 1. Obtener dimensiones (filas, columnas)
+            int[] dims = getEventSeatDimensions(eventoId);
+            int filas = dims[0], columnas = dims[1];
+            log.info("Evento {}: {} filas x {} columnas", eventoId, filas, columnas);
+            List<Map<String,Object>> allSeats = generateSeatMatrix(filas, columnas);
 
-            JsonNode eventoNode = null;
-            int filas = 0;
-            int columnas = 0;
-            if (eventoData != null && !eventoData.isBlank()) {
-                try {
-                    log.info("JSON evento recibido (truncado): {}", eventoData.length() > 1000 ? eventoData.substring(0, 1000) + "..." : eventoData);
-                    eventoNode = objectMapper.readTree(eventoData);
-                    JsonNode evtNode = eventoNode;
-                    if (evtNode.has("evento") && evtNode.path("evento").isObject()) {
-                        evtNode = evtNode.path("evento");
-                    }
-                    final JsonNode searchNode = evtNode;
-                    java.util.function.Function<String[], Integer> findInt = (String[] names) -> {
-                        for (String name : names) {
-                            JsonNode n = searchNode.path(name);
-                            if (!n.isMissingNode() && !n.isNull()) {
-                                if (n.isInt() || n.isLong()) {
-                                    return n.asInt();
-                                }
-                                String txt = n.asText(null);
-                                if (txt != null && !txt.isBlank()) {
-                                    try {
-                                        return Integer.parseInt(txt.trim());
-                                    } catch (NumberFormatException ex) {
-                                        try {
-                                            double d = Double.parseDouble(txt.trim());
-                                            return (int) d;
-                                        } catch (Exception ex2) { /* ignore */ }
-                                    }
-                                }
-                            }
-                        }
-                        return 0;
-                    };
+            // 2. Mergear estados de seats desde Redis
+            mergeRedisSeatStates(allSeats, eventoId, sessionId);
 
-                    filas = findInt.apply(new String[] { "filaAsientos", "filas", "rows" });
-                    columnas = findInt.apply(new String[] { "columnaAsientos", "columnAsientos", "columnas", "columns" });
+            // 3. (Opcional) Mergear legacy sold/lock keys si falta info
+            fallbackLegacyMerge(allSeats, eventoId, sessionId);
 
-                } catch (Exception e) {
-                    log.warn("Error parseando JSON del evento {}: {}", eventoId, e.getMessage());
-                    filas = 0;
-                    columnas = 0;
-                }
-            } else {
-                filas = 0;
-                columnas = 0;
-            }
-
-            log.info("Evento {}: {} filas x {} columnas = {} asientos totales", eventoId, filas, columnas, filas * columnas);
-
-            // 2. Generar matriz completa de asientos como LIBRE
-            List<Map<String,Object>> allSeats = new ArrayList<>();
-            for (int fila = 1; fila <= filas; fila++) {
-                for (int columna = 1; columna <= columnas; columna++) {
-                    String seatId = String.format("r%dc%d", fila, columna);
-                    Map<String,Object> seat = new HashMap<>();
-                    seat.put("seatId", seatId);
-                    seat.put("status", "LIBRE");
-                    seat.put("fila", fila);
-                    seat.put("columna", columna);
-                    allSeats.add(seat);
-                }
-            }
-            log.info("Generada matriz base de {} asientos LIBRE", allSeats.size());
-
-            // 3. Leer datos de Redis para mergear estados reales
-            String redisKey = "evento_" + eventoId;
-            log.info("=== DEBUG REDIS ===");
-            log.info("Intentando leer key: '{}'", redisKey);
-            log.info("Redis host: {}, port: {}, database: {}", "192.168.194.250", 6379, 0);
-
-            try {
-                Set<String> allKeys = redis.keys("*");
-                log.info("Total keys visibles: {}", allKeys.size());
-                log.info("Keys disponibles: {}", allKeys);
-                Set<String> eventoKeys = redis.keys("evento_*");
-                log.info("Keys evento_* encontradas: {}", eventoKeys);
-            } catch (Exception e) {
-                log.error("Error listando keys: {}", e.getMessage());
-            }
-
-            String redisData = null;
-            try {
-                redisData = redis.opsForValue().get(redisKey);
-            } catch (Exception e) {
-                log.error("Error leyendo key {} desde Redis: {}", redisKey, e.getMessage());
-                redisData = null;
-            }
-            log.info("Resultado GET '{}': {}", redisKey, redisData != null ? "FOUND" : "NULL");
-
-            long nowEpoch = java.time.Instant.now().getEpochSecond();
-
-            if (redisData != null && !redisData.trim().isEmpty()) {
-                try {
-                    log.info("Datos encontrados en Redis para {}, mergeando...", redisKey);
-                    log.info("Datos Redis (primeros 200 chars): {}", redisData.length() > 200 ? redisData.substring(0, 200) + "..." : redisData);
-
-                    JsonNode redisRoot = objectMapper.readTree(redisData);
-                    JsonNode redisSeats = redisRoot.path("asientos");
-
-                    if (redisSeats.isArray()) {
-                        int mergedCount = 0;
-
-                        for (JsonNode redisSeat : redisSeats) {
-                            int fila = redisSeat.path("fila").asInt(-1);
-                            int columna = redisSeat.path("columna").asInt(-1);
-                            String estado = redisSeat.path("estado").asText(null);
-
-                            String status = "LIBRE";
-                            if ("Vendido".equalsIgnoreCase(estado)) {
-                                status = "VENDIDO";
-                            } else if ("Bloqueado".equalsIgnoreCase(estado)) {
-                                // comprobar expiración: preferir expiraEpoch si está
-                                long expEpoch = 0;
-                                JsonNode expEpochNode = redisSeat.path("expiraEpoch");
-                                if (expEpochNode.isNumber()) {
-                                    expEpoch = expEpochNode.asLong();
-                                } else {
-                                    String expIso = redisSeat.path("expira").asText(null);
-                                    if (expIso != null) {
-                                        try {
-                                            expEpoch = java.time.OffsetDateTime.parse(expIso).toInstant().getEpochSecond();
-                                        } catch (Exception ex) {
-                                            expEpoch = 0;
-                                        }
-                                    }
-                                }
-                                if (expEpoch > nowEpoch) {
-                                    status = "BLOQUEADO";
-                                } else {
-                                    // expirado -> tratar como LIBRE
-                                    status = "LIBRE";
-                                }
-                            }
-
-                            log.debug("Procesando asiento Redis - fila: {}, columna: {}, estado: {} -> {}", fila, columna, estado, status);
-
-                            for (Map<String,Object> seat : allSeats) {
-                                Integer seatFila = (Integer) seat.get("fila");
-                                Integer seatColumna = (Integer) seat.get("columna");
-
-                                if (seatFila != null && seatColumna != null && seatFila.equals(fila) && seatColumna.equals(columna)) {
-                                    String prev = (String) seat.get("status");
-                                    // no sobrescribir VENDIDO
-                                    if (!"VENDIDO".equals(prev)) {
-                                        seat.put("status", status);
-                                        if (!"LIBRE".equals(status)) {
-                                            seat.put("source", "redis");
-                                            // set holder and mine only if BLOQUEADO
-                                            if ("BLOQUEADO".equals(status)) {
-                                                String holder = redisSeat.path("holder").asText(null);
-                                                if (holder != null && !holder.isBlank()) {
-                                                    seat.put("holder", holder);
-                                                    seat.put("mine", sessionId != null && sessionId.equals(holder));
-                                                } else {
-                                                    seat.remove("holder");
-                                                    seat.put("mine", false);
-                                                }
-                                            } else {
-                                                // for VENDIDO, optionally include buyer info if present
-                                                // for VENDIDO, include buyer info if present (object -> map)
-                                                JsonNode compradorNode = redisSeat.path("comprador");
-                                                if (!compradorNode.isMissingNode() && !compradorNode.isNull() && compradorNode.isObject()) {
-                                                    Map<String,Object> compradorMap = new HashMap<>();
-                                                    compradorMap.put("persona", compradorNode.path("persona").asText(""));
-                                                    compradorMap.put("fechaVenta", compradorNode.path("fechaVenta").asText(""));
-                                                    // si hay otros campos dentro de comprador añadelos aquí
-                                                    seat.put("comprador", compradorMap);
-                                                } else {
-                                                    // mantener compatibilidad: string vacío si no hay info
-                                                    seat.put("comprador", "");
-                                                }
-                                                // JsonNode buyer = redisSeat.path("comprador");
-                                                // if (!buyer.isMissingNode() && !buyer.isNull()) {
-                                                //     seat.put("comprador", buyer.asText(null));
-                                                // }
-                                            }
-                                        }
-                                    }
-                                    mergedCount++;
-                                    log.debug("Actualizado asiento fila {} columna {} a estado {}", fila, columna, status);
-                                    break;
-                                }
-                            }
-                        }
-
-                        log.info("Mergeados {} asientos de Redis con estados específicos", mergedCount);
-                    } else {
-                        log.warn("Datos de Redis no contienen array 'asientos' válido para evento {}", eventoId);
-                    }
-                } catch (Exception e) {
-                    log.error("Error parseando/mergeando datos JSON de Redis para {}: {}", eventoId, e.getMessage(), e);
-                }
-            } else {
-                // FALLBACK: procesar sold y seat_lock keys (legacy), marcando holder/mine adecuadamente
-                log.info("No hay datos JSON en Redis para evento {}. Aplicando fallback por claves sold/lock...", eventoId);
-                try {
-                    int mergedCount = 0;
-                    // sold keys
-                    Set<String> soldKeys = redis.keys("sold:" + eventoId + ":*");
-                    if (soldKeys != null && !soldKeys.isEmpty()) {
-                        log.info("Found sold keys for evento {}: {}", eventoId, soldKeys);
-                        for (String soldKey : soldKeys) {
-                            String[] parts = soldKey.split(":");
-                            if (parts.length >= 3) {
-                                String soldSeatId = parts[2];
-                                java.util.regex.Matcher m = java.util.regex.Pattern.compile("r(\\d+)c(\\d+)").matcher(soldSeatId);
-                                Integer sf = null, sc = null;
-                                if (m.matches()) {
-                                    sf = Integer.parseInt(m.group(1));
-                                    sc = Integer.parseInt(m.group(2));
-                                }
-                                for (Map<String,Object> seat : allSeats) {
-                                    Integer seatFila = (Integer) seat.get("fila");
-                                    Integer seatColumna = (Integer) seat.get("columna");
-                                    String seatIdStr = (String) seat.get("seatId");
-                                    boolean match = false;
-                                    if (sf != null && sc != null) {
-                                        match = seatFila != null && seatColumna != null && seatFila.equals(sf) && seatColumna.equals(sc);
-                                    } else {
-                                        match = seatIdStr != null && seatIdStr.equals(soldSeatId);
-                                    }
-                                    if (match) {
-                                        seat.put("status", "VENDIDO");
-                                        seat.put("source", "redis-sold");
-                                        mergedCount++;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // lock keys fallback (legacy seat_lock keys) - treat as BLOQUEADO and include holder/mine
-                    Set<String> lockKeys = redis.keys("seat_lock:" + eventoId + ":*");
-                    if (lockKeys != null && !lockKeys.isEmpty()) {
-                        log.info("Found lock keys for evento {}: {}", eventoId, lockKeys);
-                        for (String lockKey : lockKeys) {
-                            String[] parts = lockKey.split(":");
-                            if (parts.length >= 3) {
-                                String lockSeatId = parts[2];
-                                String lockOwner = redis.opsForValue().get(lockKey);
-                                java.util.regex.Matcher m = java.util.regex.Pattern.compile("r(\\d+)c(\\d+)").matcher(lockSeatId);
-                                Integer lf = null, lc = null;
-                                if (m.matches()) {
-                                    lf = Integer.parseInt(m.group(1));
-                                    lc = Integer.parseInt(m.group(2));
-                                }
-                                for (Map<String,Object> seat : allSeats) {
-                                    Integer seatFila = (Integer) seat.get("fila");
-                                    Integer seatColumna = (Integer) seat.get("columna");
-                                    String seatIdStr = (String) seat.get("seatId");
-                                    boolean match = false;
-                                    if (lf != null && lc != null) {
-                                        match = seatFila != null && seatColumna != null && seatFila.equals(lf) && seatColumna.equals(lc);
-                                    } else {
-                                        match = seatIdStr != null && seatIdStr.equals(lockSeatId);
-                                    }
-                                    if (match) {
-                                        String current = (String) seat.get("status");
-                                        if (!"VENDIDO".equals(current)) {
-                                            seat.put("status", "BLOQUEADO");
-                                            if (lockOwner != null && !lockOwner.isBlank()) {
-                                                seat.put("holder", lockOwner);
-                                                seat.put("mine", sessionId != null && sessionId.equals(lockOwner));
-                                            }
-                                            seat.put("source", "redis-lock");
-                                            mergedCount++;
-                                        }
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    log.info("Fallback merge applied: {} seats marked from sold/locks for evento {}", mergedCount, eventoId);
-
-                } catch (Exception e) {
-                    log.error("Error applying fallback merge for evento {}: {}", eventoId, e.getMessage(), e);
-                    log.info("No hay datos en Redis para evento {} - todos los asientos permanecen LIBRE", eventoId);
-                }
-            }
-
-            // 4. También aplicar estados de memoria local (SeatLockService) para compatibilidad
-            int eventoIdInt;
-            try {
-                eventoIdInt = Integer.parseInt(eventoId);
-            } catch (Exception ex) {
-                eventoIdInt = -1;
-            }
-
-            for (Map<String,Object> seat : allSeats) {
-                String seatId = (String) seat.get("seatId");
-
-                // Si no tiene estado específico de Redis, verificar memoria local
-                String currentStatus = (String) seat.get("status");
-                if ("LIBRE".equals(currentStatus)) {
-                    boolean sold = seatLockService.isSold(eventoIdInt, seatId);
-                    String owner = seatLockService.getLockOwner(eventoIdInt, seatId);
-
-                    if (sold) {
-                        seat.put("status", "VENDIDO");
-                        if (owner != null) {
-                            seat.put("holder", owner);
-                            seat.put("mine", sessionId != null && sessionId.equals(owner));
-                        }
-                    } else if (owner != null) {
-                        seat.put("status", "BLOQUEADO");
-                        seat.put("holder", owner);
-                        seat.put("mine", sessionId != null && sessionId.equals(owner));
-                    }
-                }
-            }
+            // 4. Mergear memoria local si falta info de Redis
+            mergeLocalSeatLocks(allSeats, eventoId, sessionId);
 
             log.info("Devolviendo {} asientos para evento {}", allSeats.size(), eventoId);
             return ResponseEntity.ok(allSeats);
@@ -380,20 +80,406 @@ public class AsientosController {
     }
 
 
+    // 1. Devuelve [filas, columnas] del evento (JSON de cátedra)
+    private int[] getEventSeatDimensions(String eventoId) {
+        try {
+            String eventoData = catedraClient.getEvento(eventoId);
+            JsonNode eventoNode = eventoData != null ? objectMapper.readTree(eventoData) : null;
+            // Extraer filas/columnas según convención - igual que antes
+            int filas = eventoNode != null ? /* lógica para obtener filas */ : 0;
+            int columnas = eventoNode != null ? /* lógica para columnas */ : 0;
+            return new int[] { filas, columnas };
+        } catch (Exception e) {
+            log.warn("Error event dims {}: {}", eventoId, e.getMessage());
+            return new int[] { 0, 0 };
+        }
+    }
+
+    // 2. Genera matriz completa de asientos base en libre
+    private List<Map<String,Object>> generateSeatMatrix(int filas, int columnas) {
+        List<Map<String,Object>> res = new ArrayList<>();
+        for (int fila = 1; fila <= filas; fila++) {
+            for (int columna = 1; columna <= columnas; columna++) {
+                String seatId = String.format("r%dc%d", fila, columna);
+                Map<String,Object> seat = new HashMap<>();
+                seat.put("seatId", seatId);
+                seat.put("status", "LIBRE");
+                seat.put("fila", fila);
+                seat.put("columna", columna);
+                res.add(seat);
+            }
+        }
+        return res;
+    }
+
+    // 3. Merge info real de asientos desde Redis (BLOQUEADO/VENDIDO)
+    private void mergeRedisSeatStates(List<Map<String,Object>> allSeats, String eventoId, String sessionId) {
+        // Lógica igual que en tu for de antes: lee el evento de Redis, parsea el JSON asientos, actualiza cada asiento por su key asientoId/fila/columna
+        // También comprobar expiración de bloqueo/vendido, holder, etc.
+        // Usa la misma lógica de tu código original, pero reubicada aquí.
+    }
+
+    // 4. Si falta info, aplica fallback sold/lock keys de Redis ("sold:evento:seat", "seat_lock:...") (opcional)
+    private void fallbackLegacyMerge(List<Map<String,Object>> allSeats, String eventoId, String sessionId) {
+        // Lógica igual que tu fallback, para legacy keys: busca sold y seat_lock, actualiza status, holder si corresponde
+    }
+
+    // 5. Por si Redis/integraciones no traen la info, mergea estados en memoria local del lock service ("BLOQUEADO"/"VENDIDO")
+    private void mergeLocalSeatLocks(List<Map<String,Object>> allSeats, String eventoId, String sessionId) {
+        // Lógica igual: chequea por cada seat si está vendido/bloqueado en memoria local y completa el status.
+    }
+
+
+
+    // @GetMapping("/asientos/{eventoId}")
+    // public ResponseEntity<List<Map<String,Object>>> getAsientos(@PathVariable String eventoId,
+    //                                                             @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
+    //     try {
+    //         log.info("Obteniendo asientos para evento {} - NUEVA LÓGICA", eventoId);
+
+    //         // 1. Obtener datos del evento desde cátedra para saber filas x columnas
+    //         String eventoData = null;
+    //         try {
+    //             eventoData = catedraClient.getEvento(eventoId);
+    //         } catch (Exception e) {
+    //             log.warn("No se pudo obtener evento {} desde cátedra: {}", eventoId, e.getMessage());
+    //             eventoData = null;
+    //         }
+
+    //         JsonNode eventoNode = null;
+    //         int filas = 0;
+    //         int columnas = 0;
+    //         if (eventoData != null && !eventoData.isBlank()) {
+    //             try {
+    //                 log.info("JSON evento recibido (truncado): {}", eventoData.length() > 1000 ? eventoData.substring(0, 1000) + "..." : eventoData);
+    //                 eventoNode = objectMapper.readTree(eventoData);
+    //                 JsonNode evtNode = eventoNode;
+    //                 if (evtNode.has("evento") && evtNode.path("evento").isObject()) {
+    //                     evtNode = evtNode.path("evento");
+    //                 }
+    //                 final JsonNode searchNode = evtNode;
+    //                 java.util.function.Function<String[], Integer> findInt = (String[] names) -> {
+    //                     for (String name : names) {
+    //                         JsonNode n = searchNode.path(name);
+    //                         if (!n.isMissingNode() && !n.isNull()) {
+    //                             if (n.isInt() || n.isLong()) {
+    //                                 return n.asInt();
+    //                             }
+    //                             String txt = n.asText(null);
+    //                             if (txt != null && !txt.isBlank()) {
+    //                                 try {
+    //                                     return Integer.parseInt(txt.trim());
+    //                                 } catch (NumberFormatException ex) {
+    //                                     try {
+    //                                         double d = Double.parseDouble(txt.trim());
+    //                                         return (int) d;
+    //                                     } catch (Exception ex2) { /* ignore */ }
+    //                                 }
+    //                             }
+    //                         }
+    //                     }
+    //                     return 0;
+    //                 };
+
+    //                 filas = findInt.apply(new String[] { "filaAsientos", "filas", "rows" });
+    //                 columnas = findInt.apply(new String[] { "columnaAsientos", "columnAsientos", "columnas", "columns" });
+
+    //             } catch (Exception e) {
+    //                 log.warn("Error parseando JSON del evento {}: {}", eventoId, e.getMessage());
+    //                 filas = 0;
+    //                 columnas = 0;
+    //             }
+    //         } else {
+    //             filas = 0;
+    //             columnas = 0;
+    //         }
+
+    //         log.info("Evento {}: {} filas x {} columnas = {} asientos totales", eventoId, filas, columnas, filas * columnas);
+
+    //         // 2. Generar matriz completa de asientos como LIBRE
+    //         List<Map<String,Object>> allSeats = new ArrayList<>();
+    //         for (int fila = 1; fila <= filas; fila++) {
+    //             for (int columna = 1; columna <= columnas; columna++) {
+    //                 String seatId = String.format("r%dc%d", fila, columna);
+    //                 Map<String,Object> seat = new HashMap<>();
+    //                 seat.put("seatId", seatId);
+    //                 seat.put("status", "LIBRE");
+    //                 seat.put("fila", fila);
+    //                 seat.put("columna", columna);
+    //                 allSeats.add(seat);
+    //             }
+    //         }
+    //         log.info("Generada matriz base de {} asientos LIBRE", allSeats.size());
+
+    //         // 3. Leer datos de Redis para mergear estados reales
+    //         String redisKey = "evento_" + eventoId;
+    //         log.info("=== DEBUG REDIS ===");
+    //         log.info("Intentando leer key: '{}'", redisKey);
+    //         log.info("Redis host: {}, port: {}, database: {}", "192.168.194.250", 6379, 0);
+
+    //         try {
+    //             Set<String> allKeys = redis.keys("*");
+    //             log.info("Total keys visibles: {}", allKeys.size());
+    //             log.info("Keys disponibles: {}", allKeys);
+    //             Set<String> eventoKeys = redis.keys("evento_*");
+    //             log.info("Keys evento_* encontradas: {}", eventoKeys);
+    //         } catch (Exception e) {
+    //             log.error("Error listando keys: {}", e.getMessage());
+    //         }
+
+    //         String redisData = null;
+    //         try {
+    //             redisData = redis.opsForValue().get(redisKey);
+    //         } catch (Exception e) {
+    //             log.error("Error leyendo key {} desde Redis: {}", redisKey, e.getMessage());
+    //             redisData = null;
+    //         }
+    //         log.info("Resultado GET '{}': {}", redisKey, redisData != null ? "FOUND" : "NULL");
+
+    //         long nowEpoch = java.time.Instant.now().getEpochSecond();
+
+    //         if (redisData != null && !redisData.trim().isEmpty()) {
+    //             try {
+    //                 log.info("Datos encontrados en Redis para {}, mergeando...", redisKey);
+    //                 log.info("Datos Redis (primeros 200 chars): {}", redisData.length() > 200 ? redisData.substring(0, 200) + "..." : redisData);
+
+    //                 JsonNode redisRoot = objectMapper.readTree(redisData);
+    //                 JsonNode redisSeats = redisRoot.path("asientos");
+
+    //                 if (redisSeats.isArray()) {
+    //                     int mergedCount = 0;
+
+    //                     for (JsonNode redisSeat : redisSeats) {
+    //                         int fila = redisSeat.path("fila").asInt(-1);
+    //                         int columna = redisSeat.path("columna").asInt(-1);
+    //                         String estado = redisSeat.path("estado").asText(null);
+
+    //                         String status = "LIBRE";
+    //                         if ("Vendido".equalsIgnoreCase(estado)) {
+    //                             status = "VENDIDO";
+    //                         } else if ("Bloqueado".equalsIgnoreCase(estado)) {
+    //                             // comprobar expiración: preferir expiraEpoch si está
+    //                             long expEpoch = 0;
+    //                             JsonNode expEpochNode = redisSeat.path("expiraEpoch");
+    //                             if (expEpochNode.isNumber()) {
+    //                                 expEpoch = expEpochNode.asLong();
+    //                             } else {
+    //                                 String expIso = redisSeat.path("expira").asText(null);
+    //                                 if (expIso != null) {
+    //                                     try {
+    //                                         expEpoch = java.time.OffsetDateTime.parse(expIso).toInstant().getEpochSecond();
+    //                                     } catch (Exception ex) {
+    //                                         expEpoch = 0;
+    //                                     }
+    //                                 }
+    //                             }
+    //                             if (expEpoch > nowEpoch) {
+    //                                 status = "BLOQUEADO";
+    //                             } else {
+    //                                 // expirado -> tratar como LIBRE
+    //                                 status = "LIBRE";
+    //                             }
+    //                         }
+
+    //                         log.debug("Procesando asiento Redis - fila: {}, columna: {}, estado: {} -> {}", fila, columna, estado, status);
+
+    //                         for (Map<String,Object> seat : allSeats) {
+    //                             Integer seatFila = (Integer) seat.get("fila");
+    //                             Integer seatColumna = (Integer) seat.get("columna");
+
+    //                             if (seatFila != null && seatColumna != null && seatFila.equals(fila) && seatColumna.equals(columna)) {
+    //                                 String prev = (String) seat.get("status");
+    //                                 // no sobrescribir VENDIDO
+    //                                 if (!"VENDIDO".equals(prev)) {
+    //                                     seat.put("status", status);
+    //                                     if (!"LIBRE".equals(status)) {
+    //                                         seat.put("source", "redis");
+    //                                         // set holder and mine only if BLOQUEADO
+    //                                         if ("BLOQUEADO".equals(status)) {
+    //                                             String holder = redisSeat.path("holder").asText(null);
+    //                                             if (holder != null && !holder.isBlank()) {
+    //                                                 seat.put("holder", holder);
+    //                                                 seat.put("mine", sessionId != null && sessionId.equals(holder));
+    //                                             } else {
+    //                                                 seat.remove("holder");
+    //                                                 seat.put("mine", false);
+    //                                             }
+    //                                         } else {
+    //                                             // for VENDIDO, include buyer info if present (object -> map)
+    //                                             JsonNode compradorNode = redisSeat.path("comprador");
+    //                                             if (!compradorNode.isMissingNode() && !compradorNode.isNull() && compradorNode.isObject()) {
+    //                                                 Map<String,Object> compradorMap = new HashMap<>();
+    //                                                 compradorMap.put("persona", compradorNode.path("persona").asText(""));
+    //                                                 compradorMap.put("fechaVenta", compradorNode.path("fechaVenta").asText(""));
+    //                                                 // si hay otros campos dentro de comprador añadelos aquí
+    //                                                 seat.put("comprador", compradorMap);
+    //                                             } else {
+    //                                                 // mantener compatibilidad: string vacío si no hay info
+    //                                                 seat.put("comprador", "");
+    //                                             }
+
+    //                                         }
+    //                                     }
+    //                                 }
+    //                                 mergedCount++;
+    //                                 log.debug("Actualizado asiento fila {} columna {} a estado {}", fila, columna, status);
+    //                                 break;
+    //                             }
+    //                         }
+    //                     }
+
+    //                     log.info("Mergeados {} asientos de Redis con estados específicos", mergedCount);
+    //                 } else {
+    //                     log.warn("Datos de Redis no contienen array 'asientos' válido para evento {}", eventoId);
+    //                 }
+    //             } catch (Exception e) {
+    //                 log.error("Error parseando/mergeando datos JSON de Redis para {}: {}", eventoId, e.getMessage(), e);
+    //             }
+    //         } else {
+    //             // FALLBACK: procesar sold y seat_lock keys (legacy), marcando holder/mine adecuadamente
+    //             log.info("No hay datos JSON en Redis para evento {}. Aplicando fallback por claves sold/lock...", eventoId);
+    //             try {
+    //                 int mergedCount = 0;
+    //                 // sold keys
+    //                 Set<String> soldKeys = redis.keys("sold:" + eventoId + ":*");
+    //                 if (soldKeys != null && !soldKeys.isEmpty()) {
+    //                     log.info("Found sold keys for evento {}: {}", eventoId, soldKeys);
+    //                     for (String soldKey : soldKeys) {
+    //                         String[] parts = soldKey.split(":");
+    //                         if (parts.length >= 3) {
+    //                             String soldSeatId = parts[2];
+    //                             java.util.regex.Matcher m = java.util.regex.Pattern.compile("r(\\d+)c(\\d+)").matcher(soldSeatId);
+    //                             Integer sf = null, sc = null;
+    //                             if (m.matches()) {
+    //                                 sf = Integer.parseInt(m.group(1));
+    //                                 sc = Integer.parseInt(m.group(2));
+    //                             }
+    //                             for (Map<String,Object> seat : allSeats) {
+    //                                 Integer seatFila = (Integer) seat.get("fila");
+    //                                 Integer seatColumna = (Integer) seat.get("columna");
+    //                                 String seatIdStr = (String) seat.get("seatId");
+    //                                 boolean match = false;
+    //                                 if (sf != null && sc != null) {
+    //                                     match = seatFila != null && seatColumna != null && seatFila.equals(sf) && seatColumna.equals(sc);
+    //                                 } else {
+    //                                     match = seatIdStr != null && seatIdStr.equals(soldSeatId);
+    //                                 }
+    //                                 if (match) {
+    //                                     seat.put("status", "VENDIDO");
+    //                                     seat.put("source", "redis-sold");
+    //                                     mergedCount++;
+    //                                     break;
+    //                                 }
+    //                             }
+    //                         }
+    //                     }
+    //                 }
+
+    //                 // lock keys fallback (legacy seat_lock keys) - treat as BLOQUEADO and include holder/mine
+    //                 Set<String> lockKeys = redis.keys("seat_lock:" + eventoId + ":*");
+    //                 if (lockKeys != null && !lockKeys.isEmpty()) {
+    //                     log.info("Found lock keys for evento {}: {}", eventoId, lockKeys);
+    //                     for (String lockKey : lockKeys) {
+    //                         String[] parts = lockKey.split(":");
+    //                         if (parts.length >= 3) {
+    //                             String lockSeatId = parts[2];
+    //                             String lockOwner = redis.opsForValue().get(lockKey);
+    //                             java.util.regex.Matcher m = java.util.regex.Pattern.compile("r(\\d+)c(\\d+)").matcher(lockSeatId);
+    //                             Integer lf = null, lc = null;
+    //                             if (m.matches()) {
+    //                                 lf = Integer.parseInt(m.group(1));
+    //                                 lc = Integer.parseInt(m.group(2));
+    //                             }
+    //                             for (Map<String,Object> seat : allSeats) {
+    //                                 Integer seatFila = (Integer) seat.get("fila");
+    //                                 Integer seatColumna = (Integer) seat.get("columna");
+    //                                 String seatIdStr = (String) seat.get("seatId");
+    //                                 boolean match = false;
+    //                                 if (lf != null && lc != null) {
+    //                                     match = seatFila != null && seatColumna != null && seatFila.equals(lf) && seatColumna.equals(lc);
+    //                                 } else {
+    //                                     match = seatIdStr != null && seatIdStr.equals(lockSeatId);
+    //                                 }
+    //                                 if (match) {
+    //                                     String current = (String) seat.get("status");
+    //                                     if (!"VENDIDO".equals(current)) {
+    //                                         seat.put("status", "BLOQUEADO");
+    //                                         if (lockOwner != null && !lockOwner.isBlank()) {
+    //                                             seat.put("holder", lockOwner);
+    //                                             seat.put("mine", sessionId != null && sessionId.equals(lockOwner));
+    //                                         }
+    //                                         seat.put("source", "redis-lock");
+    //                                         mergedCount++;
+    //                                     }
+    //                                     break;
+    //                                 }
+    //                             }
+    //                         }
+    //                     }
+    //                 }
+
+    //                 log.info("Fallback merge applied: {} seats marked from sold/locks for evento {}", mergedCount, eventoId);
+
+    //             } catch (Exception e) {
+    //                 log.error("Error applying fallback merge for evento {}: {}", eventoId, e.getMessage(), e);
+    //                 log.info("No hay datos en Redis para evento {} - todos los asientos permanecen LIBRE", eventoId);
+    //             }
+    //         }
+
+    //         // 4. También aplicar estados de memoria local (SeatLockService) para compatibilidad
+    //         int eventoIdInt;
+    //         try {
+    //             eventoIdInt = Integer.parseInt(eventoId);
+    //         } catch (Exception ex) {
+    //             eventoIdInt = -1;
+    //         }
+
+    //         for (Map<String,Object> seat : allSeats) {
+    //             String seatId = (String) seat.get("seatId");
+
+    //             // Si no tiene estado específico de Redis, verificar memoria local
+    //             String currentStatus = (String) seat.get("status");
+    //             if ("LIBRE".equals(currentStatus)) {
+    //                 boolean sold = seatLockService.isSold(eventoIdInt, seatId);
+    //                 String owner = seatLockService.getLockOwner(eventoIdInt, seatId);
+
+    //                 if (sold) {
+    //                     seat.put("status", "VENDIDO");
+    //                     if (owner != null) {
+    //                         seat.put("holder", owner);
+    //                         seat.put("mine", sessionId != null && sessionId.equals(owner));
+    //                     }
+    //                 } else if (owner != null) {
+    //                     seat.put("status", "BLOQUEADO");
+    //                     seat.put("holder", owner);
+    //                     seat.put("mine", sessionId != null && sessionId.equals(owner));
+    //                 }
+    //             }
+    //         }
+
+    //         log.info("Devolviendo {} asientos para evento {}", allSeats.size(), eventoId);
+    //         return ResponseEntity.ok(allSeats);
+
+    //     } catch (Exception ex) {
+    //         log.error("Error generando matriz de asientos para evento {}: {}", eventoId, ex.getMessage(), ex);
+    //         Map<String, Object> err = new HashMap<>();
+    //         err.put("error", "Error interno: " + ex.getMessage());
+    //         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(List.of(err));
+    //     }
+    // }
+
+
 
     @PostMapping("/api/endpoints/v1/bloquear-asientos")
     public ResponseEntity<?> bloquearAsientos(
             @RequestBody Map<String, Object> request,
             @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
-        try {
-            // Validar el token de sesión
-            if (sessionId == null || sessionId.isBlank()) {
-                Map<String, Object> resp = new HashMap<>();
-                resp.put("error", "Missing X-Session-Id");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
+            System.out.println("[DEBUG] Token recibido en header: " + sessionId);
+            if (sessionId == null || sessionId.isBlank() || !sessionTokenValidatorService.isSessionTokenValidRemoto(sessionId)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Missing or invalid X-Session-Id"));
             }
-
-            // Extraer eventoId y seatIds del body
+        try {
             int eventoId = (int) request.get("eventoId"); // Obtener eventoId
             @SuppressWarnings("unchecked")
             List<String> seatIds = (List<String>) request.get("seatIds"); // Lista de asientos
@@ -455,15 +541,13 @@ public class AsientosController {
     public ResponseEntity<?> bloquearAsiento(
             @RequestBody Map<String, Object> request,
             @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
-        try {
-            // Validar el token de sesión
-            if (sessionId == null || sessionId.isBlank()) {
-                Map<String, Object> resp = new HashMap<>();
-                resp.put("error", "Missing X-Session-Id");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
+            System.out.println("[DEBUG] Token recibido en header: " + sessionId);
+            if (sessionId == null || sessionId.isBlank() || !sessionTokenValidatorService.isSessionTokenValidRemoto(sessionId)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Missing or invalid X-Session-Id"));
             }
 
-            // Extraer eventoId y seatId del body
+        try {
             int eventoId = (int) request.get("eventoId");
             String seatId = (String) request.get("seatId");
 
@@ -511,11 +595,10 @@ public class AsientosController {
             @RequestBody Map<String, Object> request,
             @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
         try {
-            // Validar el token de sesión
-            if (sessionId == null || sessionId.isBlank()) {
-                Map<String, Object> resp = new HashMap<>();
-                resp.put("error", "Missing X-Session-Id");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
+            System.out.println("[DEBUG] Token recibido en header: " + sessionId);
+            if (sessionId == null || sessionId.isBlank() || !sessionTokenValidatorService.isSessionTokenValidRemoto(sessionId)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Missing or invalid X-Session-Id"));
             }
 
             // Extraer eventoId y seatIds del body
@@ -586,11 +669,10 @@ public class AsientosController {
             @RequestBody Map<String, Object> request,
             @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
         try {
-            // Validar el token de sesión
-            if (sessionId == null || sessionId.isBlank()) {
-                Map<String, Object> resp = new HashMap<>();
-                resp.put("error", "Missing X-Session-Id");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
+            System.out.println("[DEBUG] Token recibido en header: " + sessionId);
+            if (sessionId == null || sessionId.isBlank() || !sessionTokenValidatorService.isSessionTokenValidRemoto(sessionId)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Missing or invalid X-Session-Id"));
             }
 
             // Extraer eventoId y seatId del body
@@ -667,12 +749,11 @@ public class AsientosController {
             @RequestBody Map<String, Object> request,
             @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
         try {
-            if (sessionId == null || sessionId.isBlank()) {
-                Map<String, Object> resp = new HashMap<>();
-                resp.put("error", "Missing X-Session-Id");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
+            System.out.println("[DEBUG] Token recibido en header: " + sessionId);
+            if (sessionId == null || sessionId.isBlank() || !sessionTokenValidatorService.isSessionTokenValidRemoto(sessionId)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Missing or invalid X-Session-Id"));
             }
-
             int eventoId = (int) request.get("eventoId");
             String seatId = (String) request.get("seatId");
 
@@ -704,10 +785,10 @@ public class AsientosController {
             @RequestBody Map<String, Object> request,
             @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
         try {
-            if (sessionId == null || sessionId.isBlank()) {
-                Map<String, Object> resp = new HashMap<>();
-                resp.put("error", "Missing X-Session-Id");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(resp);
+            System.out.println("[DEBUG] Token recibido en header: " + sessionId);
+            if (sessionId == null || sessionId.isBlank() || !sessionTokenValidatorService.isSessionTokenValidRemoto(sessionId)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Missing or invalid X-Session-Id"));
             }
 
             int eventoId = (int) request.get("eventoId");

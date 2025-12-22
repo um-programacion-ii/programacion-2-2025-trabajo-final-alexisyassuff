@@ -27,16 +27,6 @@ public class RedisConfig {
     @Value("${spring.redis.database:0}")
     private int redisDatabase;
 
-    // @Bean
-    // public LettuceConnectionFactory redisConnectionFactory() {
-    //     return new LettuceConnectionFactory();
-    // }
-
-    // @Bean
-    // public StringRedisTemplate redisTemplate(LettuceConnectionFactory redisConnectionFactory) {
-    //     return new StringRedisTemplate(redisConnectionFactory);
-    // }
-
     @Bean
     public RedisConnectionFactory redisConnectionFactory() {
         log.info("=== CONFIGURANDO REDIS CONNECTION ===");
@@ -65,14 +55,10 @@ public class RedisConfig {
         StringRedisTemplate template = new StringRedisTemplate();
         template.setConnectionFactory(connectionFactory);
 
-        // Forzar serializers explícitos para String
         template.setKeySerializer(new StringRedisSerializer());
         template.setValueSerializer(new StringRedisSerializer());
         template.setHashKeySerializer(new StringRedisSerializer());
         template.setHashValueSerializer(new StringRedisSerializer());
-
-        // No habilitamos default serializer (ya están configurados)
-        // template.setEnableDefaultSerializer(false);
 
         log.info("StringRedisTemplate configurado con StringRedisSerializer sin prefijos");
 

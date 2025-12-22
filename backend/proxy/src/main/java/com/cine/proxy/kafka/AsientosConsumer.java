@@ -1,5 +1,4 @@
 package com.cine.proxy.kafka;
-
 import com.cine.proxy.model.Seat;
 import com.cine.proxy.service.RedisSeatService;
 import com.cine.proxy.service.MetricsService;
@@ -10,13 +9,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-
 import java.time.Instant;
 
-/**
- * Kafka consumer para el topic configurado en application.yml (kafka.topic.eventos).
- * Ahora notifica al Backend vía WebhookNotifier luego de persistir/upsert en Redis.
- */
+
 @Component
 public class AsientosConsumer {
 
@@ -65,14 +60,7 @@ public class AsientosConsumer {
 
             // Persistir con lógica de timestamp
             seatService.upsertSeatWithTimestamp(eventoId, seat);
-
-            // NOTIFICAR al backend (no bloqueante; errores logged)
-            try {
-                webhookNotifier.notifySeatChange(eventoId, seat);
-            } catch (Exception e) {
-                log.warn("Error al invocar WebhookNotifier (no crítico): {}", e.getMessage());
-            }
-
+        
             metrics.incrementEventsProcessed();
         } catch (Exception e) {
             log.error("Error procesando mensaje Kafka de eventos-asientos", e);

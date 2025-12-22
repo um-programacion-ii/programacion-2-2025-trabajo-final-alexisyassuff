@@ -58,15 +58,12 @@ class EventDetailViewModel(private val eventId: Long) : ViewModel() {
     var error by mutableStateOf<String?>(null)
         private set
     
-    // dentro de la clase EventDetailViewModel { ... } pega este método
     suspend fun getSeatState(eventId: Long, seatId: String): Map<String, Any?> {
         return withContext(Dispatchers.IO) {
-            // Llamamos al ApiClient que ya tenés (ajusta el package si tu ApiClient está en otro paquete)
             com.cine.shared.ApiClient.getSeatState(eventId, seatId)
         }
     }
     
-    // Map para rastrear timestamps de bloqueos: seatId -> timestamp en millis
     var seatLockTimestamps by mutableStateOf<Map<String, Long>>(emptyMap())
         private set
 

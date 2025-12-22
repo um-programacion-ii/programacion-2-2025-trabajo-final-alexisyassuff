@@ -3,13 +3,7 @@ package com.cine.proxy.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
-/**
- * Propiedades para la integración con la cátedra.
- * Se mapean desde application.yml con prefijo "catedra".
- *
- * Añadimos redisTokenKey para que TokenService pueda leer/escribir el token en Redis
- * bajo una clave configurable (por defecto "catedra:token").
- */
+
 @Component
 @ConfigurationProperties(prefix = "catedra")
 public class CatedraProperties {
