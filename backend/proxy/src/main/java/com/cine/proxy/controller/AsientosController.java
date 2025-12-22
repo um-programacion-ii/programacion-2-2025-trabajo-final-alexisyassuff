@@ -85,9 +85,8 @@ public class AsientosController {
         try {
             String eventoData = catedraClient.getEvento(eventoId);
             JsonNode eventoNode = eventoData != null ? objectMapper.readTree(eventoData) : null;
-            // Extraer filas/columnas según convención - igual que antes
-            int filas = eventoNode != null ? /* lógica para obtener filas */ : 0;
-            int columnas = eventoNode != null ? /* lógica para columnas */ : 0;
+            int filas = eventoNode != null ? 
+            int columnas = eventoNode != null ? 
             return new int[] { filas, columnas };
         } catch (Exception e) {
             log.warn("Error event dims {}: {}", eventoId, e.getMessage());

@@ -152,18 +152,7 @@ public class RedisSeatService {
         }
     }
 
-    /**
-     * Upsert con lógica de idempotencia por timestamp:
-     * - Si no existe: escribe el seat.
-     * - Si existe: compara updatedAt y solo escribe si incoming.updatedAt >= existing.updatedAt.
-     *
-     * Implementación simple GET + PUT (suficiente para pruebas). Para alta concurrencia
-     * puede implementarse en LUA para atomicidad.
-     */
-    // REEMPLAZA el método upsertSeatWithTimestamp por este
-
-    // Reemplaza los métodos existentes por estas implementaciones robustas
-
+   
     public void upsertSeatWithTimestamp(String eventoId, Seat incoming) {
         try {
             String key = keyForEvento(eventoId);
