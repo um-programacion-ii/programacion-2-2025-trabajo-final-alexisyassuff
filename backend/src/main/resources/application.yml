@@ -1,0 +1,61 @@
+spring:
+  datasource:
+    url: jdbc:h2:file:./data/cine_db
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  redis:
+    host: 192.168.194.250
+    port: 6379
+    database: 0
+    ssl: false
+
+  kafka:
+    bootstrap-servers: 192.168.194.250:9092
+    consumer:
+      group-id: backend-eventos-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        spring.kafka.consumer.enable-auto-commit: "true"
+    listener:
+      missing-topics-fatal: false
+
+server:
+  port: 8080
+
+catedra:
+  base-url: "http://192.168.194.250:8080"
+  ping-on-startup: true
+
+proxy:
+  base-url: "http://localhost:8081"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,mappings
+  endpoint:
+    health:
+      show-details: "always"
+
+reconciliation:
+  fixedRateMs: 300000
+
+kafka:
+  topic:
+    eventos: "eventos-actualizacion" # Tópico para cambios en metadatos del evento (NO asientos)

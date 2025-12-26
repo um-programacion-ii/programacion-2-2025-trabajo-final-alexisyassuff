@@ -1,0 +1,35 @@
+catedra:
+  base-url: "http://192.168.194.250:8080"
+  token: "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJhbHVfMTc2NDQyOTYzOSIsImV4cCI6MTc2NzAyMTY0MCwiYXV0aCI6IlJPTEVfVVNFUiIsImlhdCI6MTc2NDQyOTY0MH0.NcLOxLcORQetlqFzkFDOz1tBlaA6H0bVHq4lOyJ9mEs4plIrgdiG6G_IIaQU8UNMAeyGSVkJQ_129Hkt1dOFCA"
+  timeout-ms: 5000
+
+kafka:
+  topic:
+    eventos: "eventos-asientos"
+  group: proxy-asientos-group
+
+spring:
+  kafka:
+    bootstrap-servers: 192.168.194.250:9092
+    consumer:
+      group-id: proxy-asientos-group
+      auto-offset-reset: earliest
+
+  redis:
+    host: 192.168.194.250
+    port: 6379
+    database: 0
+
+backend:
+  webhook:
+    url: "http://localhost:8089/internal/proxy/webhook"
+    timeout-ms: 2000
+  base-url: "http://localhost:8080"
+
+server:
+  port: 8081
+
+logging:
+  level:
+    org.springframework.data.redis: INFO
+    org.springframework.kafka: INFO
