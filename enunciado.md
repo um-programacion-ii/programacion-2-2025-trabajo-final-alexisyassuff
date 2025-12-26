@@ -686,3 +686,78 @@ JSON salida 2 (venta exitosa):
 "descripcion": "Venta realizada con éxito",
 "precioVenta": 1200.
 }
+
+    private suspend fun getAvailableSeatsCount(eventId: Long): Int {
+        return try {
+            val url = "${PROXY_BASE}/api/endpoints/v1/evento/$eventId"
+            val req = Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("Accept", "application/json")
+                .build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.code in 200..299) {
+                    val body = resp.body?.string() ?: ""
+                    val obj = JSONObject(body)
+                    // Si el endpoint devuelve "asientos" con estado, contamos los "LIBRE"
+                    if (obj.has("asientos")) {
+                        val asientos = obj.getJSONArray("asientos")
+                        var available = 0
+                        for (i in 0 until asientos.length()) {
+                            val asiento = asientos.getJSONObject(i)
+                            val status = asiento.optString("status", "LIBRE").uppercase()
+                            if (status.contains("LIBRE") || status.contains("AVAILABLE") || status.contains("FREE")) {
+                                available++
+                            }
+                        }
+                        return available
+                    } else {
+                        // fallback: dimensiones
+                        val rows = obj.optInt("filaAsientos", obj.optInt("rows", 0))
+                        // soportar variantes de nombre de columnas
+                        val cols = when {
+                            obj.has("columnaAsientos") -> obj.optInt("columnaAsientos", 0)
+                            obj.has("columns") -> obj.optInt("columns", 0)
+                            else -> obj.optInt("columnas", 0)
+                        }
+                        return rows * cols
+                    }
+                } else {
+                    0
+                }
+            }
+        } catch (e: Exception) {
+            0 // En caso de error, devolver 0
+        }
+    }
+
+suspend fun getSeats(eventId: Long): List<Seat> = withContext(Dispatchers.IO) {
+val req = Request.Builder()
+.url("$PROXY_BASE/asientos/$eventId")
+.get()
+.addHeader("Accept", "application/json")
+.addHeader("X-Session-Id", sessionHeaderValue())
+.build()
+client.newCall(req).execute().use { resp ->
+val body = resp.body?.string() ?: "[]"
+if (resp.code == 401) {
+SessionManager.clear()
+throw UnauthorizedException("Session expired")
+}
+if (resp.code !in 200..299) {
+if (resp.code == 204) return@withContext emptyList<Seat>()
+throw Exception("getSeats failed: http=${resp.code} body=$body")
+}
+val arr = JSONArray(body)
+val list = mutableListOf<Seat>()
+for (i in 0 until arr.length()) {
+val o = arr.getJSONObject(i)
+val seatId = o.optString("seatId", o.optString("asientoId", "unknown"))
+val status = o.optString("status", o.optString("estado", "LIBRE"))
+val holder = if (o.has("holder")) o.optString("holder") else o.optString("usuario", null)
+val updatedAt = o.optString("updatedAt", null)
+list.add(Seat(seatId, status, holder, updatedAt))
+}
+return@withContext list
+}
+}

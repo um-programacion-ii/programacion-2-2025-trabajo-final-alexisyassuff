@@ -1,0 +1,13 @@
+/home/alexis-yassuff/Programacion II/proxy/src/main/java/com/cine/proxy/ProxyApplication.java
+/home/alexis-yassuff/Programacion II/proxy/src/main/java/com/cine/proxy/client/CatedraException.java
+/home/alexis-yassuff/Programacion II/proxy/src/main/java/com/cine/proxy/config/CatedraProperties.java
+/home/alexis-yassuff/Programacion II/proxy/src/main/java/com/cine/proxy/config/RedisConfig.java
+/home/alexis-yassuff/Programacion II/proxy/src/main/java/com/cine/proxy/config/WebClientConfig.java
+/home/alexis-yassuff/Programacion II/proxy/src/main/java/com/cine/proxy/controller/AsientosController.java
+/home/alexis-yassuff/Programacion II/proxy/src/main/java/com/cine/proxy/controller/EventsController.java
+/home/alexis-yassuff/Programacion II/proxy/src/main/java/com/cine/proxy/model/Seat.java
+/home/alexis-yassuff/Programacion II/proxy/src/main/java/com/cine/proxy/service/EventosKafkaListener.java
+/home/alexis-yassuff/Programacion II/proxy/src/main/java/com/cine/proxy/service/ProxyEventoInitializationService.java
+/home/alexis-yassuff/Programacion II/proxy/src/main/java/com/cine/proxy/service/RedisSeatService.java
+/home/alexis-yassuff/Programacion II/proxy/src/main/java/com/cine/proxy/service/SessionTokenValidatorService.java
+/home/alexis-yassuff/Programacion II/proxy/src/main/java/com/cine/proxy/webhook/WebhookNotifier.java

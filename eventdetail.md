@@ -1,177 +1,33 @@
-package com.yassuff.cinemobile.ui
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material3.*
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import com.cine.shared.ApiClient
-import com.cine.shared.Seat
-import com.cine.shared.SessionManager
-import kotlinx.coroutines.launch
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.LaunchedEffect
-import kotlinx.coroutines.delay
-import java.text.SimpleDateFormat
-import java.util.*
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
-class EventDetailActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        val eventId = intent?.getLongExtra("eventId", -1L) ?: -1L
-        setContent {
-            val vm: EventDetailViewModel = viewModel(factory = EventDetailViewModel.provideFactory(eventId))
-            EventDetailScreen(vm = vm, eventId = eventId)
-        }
-    }
-}
-
-
-class EventDetailViewModel(private val eventId: Long) : ViewModel() {
-    var seats by mutableStateOf<List<Seat>>(emptyList())
-        private set
-    var loading by mutableStateOf(false)
-        private set
-    var error by mutableStateOf<String?>(null)
-        private set
-    
-
-    var seatLockTimestamps by mutableStateOf<Map<String, Long>>(emptyMap())
-        private set
-
-    init {
-        loadSeats()
-    }
-
-    fun loadSeats() {
-        loading = true
-        error = null
-        viewModelScope.launch {
-            try {
-                val newSeats = ApiClient.getSeats(eventId)
-                val mySession = SessionManager.getToken()
-                val currentTime = System.currentTimeMillis()
-                
-                // Limpiar timestamps expirados del SessionManager
-                SessionManager.clearExpiredTimestamps(eventId)
-                
-                // Actualizar timestamps usando persistencia del SessionManager
-                val newTimestamps = seatLockTimestamps.toMutableMap()
-                
-                newSeats.forEach { seat ->
-                    val isMyBlocked = seat.status?.uppercase()?.contains("BLOQ") == true && 
-                                     seat.holder == mySession
-                    
-                    if (isMyBlocked) {
-                        // Verificar si ya tenemos el timestamp persistido
-                        val persistedTimestamp = SessionManager.getSeatTimestamp(eventId, seat.seatId)
-                        
-                        if (persistedTimestamp != null) {
-                            // Usar timestamp persistido
-                            newTimestamps[seat.seatId] = persistedTimestamp
-                        } else if (!seatLockTimestamps.containsKey(seat.seatId)) {
-                            // Nuevo bloqueo detectado - guardar timestamp persistente
-                            SessionManager.saveSeatTimestamp(eventId, seat.seatId, currentTime)
-                            newTimestamps[seat.seatId] = currentTime
-                        }
-                    } else {
-                        // Asiento no bloqueado por mí - limpiar
-                        if (seatLockTimestamps.containsKey(seat.seatId)) {
-                            SessionManager.removeSeatTimestamp(eventId, seat.seatId)
-                            newTimestamps.remove(seat.seatId)
-                        }
-                    }
-                }
-                
-                seatLockTimestamps = newTimestamps
-                seats = newSeats
-            } catch (ex: Exception) {
-                ex.printStackTrace()
-                error = ex.message ?: "Error cargando asientos"
-            } finally {
-                loading = false
-            }
-        }
-    }
-
-    fun markSeatAsBlocked(seatId: String) {
-        val currentTime = System.currentTimeMillis()
-        // Guardar timestamp persistente
-        SessionManager.saveSeatTimestamp(eventId, seatId, currentTime)
-        
-        val newTimestamps = seatLockTimestamps.toMutableMap()
-        newTimestamps[seatId] = currentTime
-        seatLockTimestamps = newTimestamps
-    }
-
-    fun removeSeatTimestamp(seatId: String) {
-        // Remover timestamp persistente
-        SessionManager.removeSeatTimestamp(eventId, seatId)
-        
-        val newTimestamps = seatLockTimestamps.toMutableMap()
-        newTimestamps.remove(seatId)
-        seatLockTimestamps = newTimestamps
-    }
-
-    companion object {
-        // Factory simple para pasar eventId a viewModel() en compose
-        fun provideFactory(eventId: Long): androidx.lifecycle.ViewModelProvider.Factory {
-            return object : androidx.lifecycle.ViewModelProvider.Factory {
-                override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                    @Suppress("UNCHECKED_CAST")
-                    return EventDetailViewModel(eventId) as T
-                }
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
+val ctx = LocalContext.current
+val scope = rememberCoroutineScope()
+val snackbarHostState = remember { SnackbarHostState() }
 
     var selectedSeats by remember { mutableStateOf<Set<Seat>>(emptySet()) }
     var performingAction by remember { mutableStateOf(false) }
     var showMultiDialog by remember { mutableStateOf(false) }
 
+    // Variables para datos del comprador
     var showBuyerDialog by remember { mutableStateOf(false) }
     var buyerPersona by remember { mutableStateOf("") }
 
+    // Temporizador para actualizar los tiempos restantes cada segundo
     LaunchedEffect(vm.seatLockTimestamps) {
         while (vm.seatLockTimestamps.isNotEmpty()) {
-            delay(1000)
+            delay(1000) // Actualizar cada segundo
             val currentTime = System.currentTimeMillis()
             val expiredSeats = vm.seatLockTimestamps.filter { (_, timestamp) ->
-                (currentTime - timestamp) >= 300_000 
+                (currentTime - timestamp) >= 300_000 // 5 minutos = 300,000 ms
             }
 
+            // Remover timestamps de asientos expirados
             expiredSeats.keys.forEach { seatId ->
                 vm.removeSeatTimestamp(seatId)
             }
+
+            // Si hay asientos que expiraron, recargar la vista
             if (expiredSeats.isNotEmpty()) {
                 vm.loadSeats()
             }
@@ -225,7 +81,7 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                 }
                 else -> {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(8),
+                        columns = GridCells.Fixed(6),
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(8.dp),
@@ -252,19 +108,26 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                                             } else if (selectedSeats.size < 4) {
                                                 selectedSeats + seat // Seleccionar (máximo 4)
                                             } else {
-                                                selectedSeats
+                                                selectedSeats // No permitir más de 4
                                             }
                                         }
                                         // Para otros estados (vendido, bloqueado por otro), mostrar info
                                         else -> {
                                             scope.launch {
                                                 val msg = when {
-                                                    status.contains("VEND") ->
-                                                        "Asiento vendido (datos no disponibles)"
-                                                    status.contains("BLOQ") ->
-                                                        "Asiento bloqueado por otro usuario: ${seat.holder ?: "desconocido"}"
-                                                    else ->
-                                                        "Asiento no disponible: $status"
+                                                    status.contains("VEND") -> {
+                                                        try {
+                                                            val seatState = vm.getSeatState(eventId, seat.seatId)
+                                                            val comprador = seatState["comprador"] as? Map<*, *>
+                                                            val nombre = comprador?.get("persona") as? String ?: "desconocido"
+                                                            val fecha = comprador?.get("fechaVenta") as? String ?: ""
+                                                            "Asiento vendido a $nombre ${if (fecha.isNotBlank()) "el $fecha" else ""}"
+                                                        } catch (ex: Exception) {
+                                                            "Asiento vendido (datos no disponibles)"
+                                                        }
+                                                    }
+                                                    status.contains("BLOQ") -> "Asiento bloqueado por otro usuario: ${seat.holder ?: "desconocido"}"
+                                                    else -> "Asiento no disponible: $status"
                                                 }
                                                 snackbarHostState.showSnackbar(msg)
                                             }
@@ -277,7 +140,7 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                 }
             }
 
-            // Botón flotante para multiacción
+            // Botón flotante para mostrar opciones cuando hay asientos seleccionados
             if (selectedSeats.isNotEmpty()) {
                 FloatingActionButton(
                     onClick = { showMultiDialog = true },
@@ -289,7 +152,7 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                 }
             }
 
-            // Dialogo para seleccion múltiple (bloqueo y venta)
+            // Dialog para acciones múltiples (BLOQUEO)
             if (showMultiDialog && selectedSeats.isNotEmpty()) {
                 val libreSeats = selectedSeats.filter {
                     val status = it.status?.uppercase()?.trim() ?: ""
@@ -303,7 +166,9 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
 
                 AlertDialog(
                     onDismissRequest = {
-                        if (!performingAction) showMultiDialog = false
+                        if (!performingAction) {
+                            showMultiDialog = false
+                        }
                     },
                     title = {
                         Text(
@@ -334,6 +199,7 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                     confirmButton = {
                         if (!performingAction) {
                             Column {
+                                // Mostrar bloquear solo si hay asientos libres
                                 if (libreSeats.isNotEmpty()) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         TextButton(onClick = {
@@ -360,6 +226,8 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                                         }) { Text("Bloquear libres (${libreSeats.size})") }
                                     }
                                 }
+
+                                // Botón de vender solo si hay asientos bloqueados por mí
                                 if (myBlockedSeats.isNotEmpty()) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         TextButton(onClick = {
@@ -373,14 +241,18 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                     },
                     dismissButton = {
                         TextButton(onClick = {
-                            if (!performingAction) showMultiDialog = false
-                        }) { Text("Cancelar") }
+                            if (!performingAction) {
+                                showMultiDialog = false
+                            }
+                        }) {
+                            Text("Cancelar")
+                        }
                     }
                 )
             }
         }
 
-        // Diálogo para datos del comprador y venta
+        // Diálogo para capturar datos del comprador (VENTA)
         if (showBuyerDialog) {
             AlertDialog(
                 onDismissRequest = {
@@ -393,6 +265,7 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text("Complete los datos para finalizar la venta:")
+
                         OutlinedTextField(
                             value = buyerPersona,
                             onValueChange = { buyerPersona = it },
@@ -402,11 +275,14 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                             enabled = !performingAction,
                             singleLine = true
                         )
+
                         val mySession = SessionManager.getToken()
+                        // Mostrar solo los asientos SELECCIONADOS que están bloqueados por mí
                         val selectedBlockedSeats = selectedSeats.filter { seat ->
                             seat.status?.uppercase()?.contains("BLOQ") == true &&
                                     seat.holder == mySession
                         }
+
                         if (selectedBlockedSeats.isNotEmpty()) {
                             Text(
                                 "Asientos a vender: ${selectedBlockedSeats.map { it.seatId }.joinToString(", ")}",
@@ -429,6 +305,7 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                                                     seat.holder == mySession
                                         }
                                         val seatIds = selectedBlockedSeats.map { it.seatId }
+
                                         if (seatIds.isNotEmpty()) {
                                             ApiClient.purchaseSeatsWithBuyer(eventId, seatIds, buyerPersona)
                                             snackbarHostState.showSnackbar("${seatIds.size} asientos vendidos a $buyerPersona")
@@ -460,115 +337,12 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                             showBuyerDialog = false
                             buyerPersona = ""
                         }
-                    }) { Text("Cancelar") }
+                    }) {
+                        Text("Cancelar")
+                    }
                 }
             )
         }
     }
-}
 
-
-@Composable
-private fun SeatItem(seat: Seat, isSelected: Boolean = false, lockTimestamp: Long? = null, onClick: () -> Unit) {
-    val baseColor = seatStatusColor(seat.status)
-    val color = if (isSelected) Color(0xFF2196F3) else baseColor // Azul si está seleccionado
-    
-    // Calcular tiempo restante si es un bloqueo mío con timestamp
-    var timeRemaining by remember { mutableStateOf<Int?>(null) }
-    
-    LaunchedEffect(lockTimestamp) {
-        if (lockTimestamp != null) {
-            while (true) {
-                val currentTime = System.currentTimeMillis()
-                val elapsedSeconds = ((currentTime - lockTimestamp) / 1000).toInt()
-                val remainingSeconds = 300 - elapsedSeconds // 5 minutos = 300 segundos
-                
-                if (remainingSeconds <= 0) {
-                    timeRemaining = null
-                    break
-                } else {
-                    timeRemaining = remainingSeconds
-                }
-                
-                delay(1000)
-            }
-        } else {
-            timeRemaining = null
-        }
-    }
-    
-    Card(
-        modifier = Modifier
-            .size(56.dp)
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = color),
-        border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF1976D2)) else null
-    ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = seat.seatId.take(6),
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center,
-                    color = if (isDarkTextNeeded(color)) Color.Black else Color.White,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                )
-                
-                // Mostrar temporizador solo si hay timestamp y es mi bloqueo
-                timeRemaining?.let { remaining ->
-                    val mySession = SessionManager.getToken()
-                    val isMyBlock = seat.status?.uppercase()?.contains("BLOQ") == true && 
-                                   seat.holder == mySession
-                    
-                    if (isMyBlock) {
-                        val minutes = remaining / 60
-                        val seconds = remaining % 60
-                        Text(
-                            text = String.format("%d:%02d", minutes, seconds),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (remaining < 60) Color.Red else 
-                                   if (isDarkTextNeeded(color)) Color.Black else Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun seatStatusColor(status: String?): Color {
-    val s = status?.uppercase()?.trim() ?: ""
-    return when {
-        s.contains("LIBRE") || s.contains("AVAILABLE") || s.contains("FREE") -> Color(0xFF81C784) // verde
-        s.contains("VEND") || s.contains("SOLD") || s.contains("VENDIDO") -> Color(0xFFF06292) // rojo
-        s.contains("BLOQ") || s.contains("RESERV") || s.contains("BLOCK") -> Color(0xFFFFF176) // amarillo
-        else -> Color(0xFF90A4AE) // gris por defecto
-    }
-}
-
-private fun isDarkTextNeeded(bg: Color): Boolean {
-    val luminance = (0.299 * bg.red + 0.587 * bg.green + 0.114 * bg.blue)
-    return luminance > 0.6
-}
-
-private fun formatDateTime(dateTimeStr: String): String {
-    return try {
-        // Intentar parsear diferentes formatos de fecha ISO
-        val inputFormat = when {
-            dateTimeStr.contains("T") && dateTimeStr.contains("Z") -> 
-                SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.getDefault()).apply {
-                    timeZone = TimeZone.getTimeZone("UTC")
-                }
-            dateTimeStr.contains("T") -> SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
-            dateTimeStr.contains("-") -> SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-            else -> return dateTimeStr
-        }
-        
-        val outputFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-        val date = inputFormat.parse(dateTimeStr)
-        date?.let { outputFormat.format(it) } ?: dateTimeStr
-    } catch (e: Exception) {
-        dateTimeStr // Si hay error, devolver fecha original
-    }
 }
