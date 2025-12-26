@@ -8,12 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * Implementación en memoria de TokenRepository para la Etapa 1.
- * - Thread-safe lo suficiente para pruebas locales.
- * - Genera ids automáticamente.
- * - Mantiene lista por serviceName y devuelve el token con mayor id.
- */
+
 @Repository
 public class InMemoryTokenRepository implements TokenRepository {
 

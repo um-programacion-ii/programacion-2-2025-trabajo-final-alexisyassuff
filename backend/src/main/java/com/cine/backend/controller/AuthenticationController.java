@@ -2,39 +2,38 @@ package com.cine.backend.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.client.RestTemplate;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.http.HttpStatus;
+// import com.cine.backend.service.TokenService;
+import com.cine.backend.model.ExternalToken;
+import com.cine.backend.catedra.TokenResponse;
+import java.util.Optional;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.UUID;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import java.time.Duration;
 
-/**
- * AuthenticationController (DEV helper) — versión rápida para pruebas locales.
- *
- * - POST /authenticate { "username":"...", "password":"..." } -> 200 + {"token":"..."} if valid
- * - Returns 401 if credentials invalid.
- *
- * NOTA: esta implementación usa un map in-memory para usuarios de prueba.
- * Para producción debés reemplazar la validación por una llamada a tu UserService / AuthenticationManager.
- */
+
 @RestController
 public class AuthenticationController {
-
-    // Usuarios de prueba (username -> password). Cambialos por los reales o por una llamada a tu servicio.
-    private static final Map<String,String> USERS = new ConcurrentHashMap<>();
-
+    private static final Map<String, String> USERS = new ConcurrentHashMap<>();
+    private static final Map<String, SessionInfo> SESSIONS = new ConcurrentHashMap<>();
     static {
-        // ejemplo: agregá aquí los usuarios de prueba que quieras usar
-        USERS.put("alu_1764429639", "secreto"); // tu usuario de prueba
-        // add more as needed
+        USERS.put("alu_1764429639", "secreto");
     }
 
-    private final com.cine.backend.service.TokenService tokenService;
-
-    public AuthenticationController(com.cine.backend.service.TokenService tokenService) {
-        this.tokenService = tokenService;
+    static class SessionInfo {
+        String username;
+        String token;
+        Instant expiresAt;
     }
 
     @PostMapping("/authenticate")
-    public ResponseEntity<?> authenticate(@RequestBody Map<String,String> body) {
+    public ResponseEntity<?> authenticate(@RequestBody Map<String, String> body) {
         String username = body.get("username");
         String password = body.get("password");
         if (username == null || password == null) {
@@ -44,13 +43,28 @@ public class AuthenticationController {
         if (expected == null || !expected.equals(password)) {
             return ResponseEntity.status(401).body("Invalid credentials");
         }
-        // Generar o reutilizar token: aquí reusamos token si existe en TokenService.latest for 'catedra'
-        var maybe = tokenService.getLatestToken("catedra");
-        if (maybe.isPresent()) {
-            return ResponseEntity.ok(Map.of("token", maybe.get().getToken()));
-        }
-        // Si no hay token guardado, devolvemos 200 con placeholder token (solo dev)
-        String token = "dev-token-" + username;
-        return ResponseEntity.ok(Map.of("token", token));
+
+        String token = UUID.randomUUID().toString();
+        Instant expiresAt = Instant.now().plusSeconds(15 * 60);
+
+        SessionInfo session = new SessionInfo();
+        session.username = username;
+        session.token = token;
+        session.expiresAt = expiresAt;
+        SESSIONS.put(token, session);
+
+        return ResponseEntity.ok(Map.of("token", token, "expiresAt", expiresAt.toString()));
+    }
+
+    @PostMapping("/validate-token")
+    public ResponseEntity<?> validateToken(@RequestBody Map<String, String> body) {
+        String token = body.get("token");
+        boolean valid = isTokenValid(token);
+        return ResponseEntity.ok(Map.of("valid", valid));
+    }
+
+    private static boolean isTokenValid(String token) {
+        SessionInfo s = SESSIONS.get(token);
+        return s != null && s.expiresAt.isAfter(Instant.now());
     }
 }

@@ -1,0 +1,192 @@
+2025-12-24 18:06:46.389651-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+insert into eventos (columnas,descripcion,fecha,filas,imagen,precio,titulo,updated_at,id) values (?,?,?,?,?,?,?,?,?) [22001-232]
+2025-12-24 18:07:21.842007-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+insert into eventos (columnas,descripcion,fecha,filas,imagen,precio,titulo,updated_at,id) values (?,?,?,?,?,?,?,?,?) [22001-232]
+2025-12-24 18:08:01.202466-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+insert into eventos (columnas,descripcion,fecha,filas,imagen,precio,titulo,updated_at,id) values (?,?,?,?,?,?,?,?,?) [22001-232]
+2025-12-24 18:08:47.640627-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+insert into eventos (columnas,descripcion,fecha,filas,imagen,precio,titulo,updated_at,id) values (?,?,?,?,?,?,?,?,?) [22001-232]
+2025-12-24 18:11:19.070504-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"; SQL statement:
+insert into eventos (columnas,descripcion,fecha,filas,imagen,precio,titulo,updated_at,id) values (?,?,?,?,?,?,?,?,?) [22001-232]
+2025-12-24 18:32:34.161233-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"; SQL statement:
+insert into eventos (columnas,descripcion,fecha,filas,imagen,precio,titulo,updated_at,id) values (?,?,?,?,?,?,?,?,?) [22001-232]
+2025-12-24 18:58:24.404513-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-24 19:29:16.753657-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-24 19:34:34.516363-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-24 20:09:36.169059-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-24 20:16:03.235373-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-24 20:50:22.955596-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-24 21:09:51.967556-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-25 10:49:33.078255-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-25 11:07:49.935029-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-25 11:15:01.610378-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t39.30808-6/498246488_1010495731278033_6... (377)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-25 22:45:42.156191-03:00 jdbc[24]: null
+org.h2.message.DbException: La conexión no fue cerrada por la aplicación y esta siendo limpiada (garbage collected)
+The connection was not closed by the application and is garbage collected [90018-232]
+	at org.h2.message.DbException.get(DbException.java:223)
+	at org.h2.message.DbException.get(DbException.java:199)
+	at org.h2.message.DbException.get(DbException.java:188)
+	at org.h2.jdbc.JdbcConnection.closeOld(JdbcConnection.java:217)
+	at org.h2.jdbc.JdbcConnection.<init>(JdbcConnection.java:134)
+	at org.h2.Driver.connect(Driver.java:59)
+	at com.zaxxer.hikari.util.DriverDataSource.getConnection(DriverDataSource.java:144)
+	at com.zaxxer.hikari.pool.PoolBase.newConnection(PoolBase.java:370)
+	at com.zaxxer.hikari.pool.PoolBase.newPoolEntry(PoolBase.java:207)
+	at com.zaxxer.hikari.pool.HikariPool.createPoolEntry(HikariPool.java:488)
+	at com.zaxxer.hikari.pool.HikariPool$PoolEntryCreator.call(HikariPool.java:752)
+	at com.zaxxer.hikari.pool.HikariPool$PoolEntryCreator.call(HikariPool.java:731)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:840)
+Caused by: org.h2.jdbc.JdbcSQLNonTransientConnectionException: La conexión no fue cerrada por la aplicación y esta siendo limpiada (garbage collected)
+The connection was not closed by the application and is garbage collected [90018-232]
+	at org.h2.message.DbException.getJdbcSQLException(DbException.java:690)
+	at org.h2.message.DbException.getJdbcSQLException(DbException.java:489)
+	... 16 more
+2025-12-25 22:46:47.940240-03:00 jdbc[25]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Error de Sintaxis en sentencia SQL "[*]GET * FROM  EVENTOS"; se esperaba "GRANT"
+Syntax error in SQL statement "[*]GET * FROM  EVENTOS"; expected "GRANT"; SQL statement:
+GET * FROM  EVENTOS [42001-232]
+2025-12-25 22:46:52.729865-03:00 jdbc[25]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Error de Sintaxis en sentencia SQL "[*]GET * FROM EVENTOS"; se esperaba "GRANT"
+Syntax error in SQL statement "[*]GET * FROM EVENTOS"; expected "GRANT"; SQL statement:
+GET * FROM EVENTOS [42001-232]
+2025-12-25 23:07:23.675251-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 11:59:06.846009-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 15:56:14.797999-03:00 jdbc[99]: null
+org.h2.message.DbException: La conexión no fue cerrada por la aplicación y esta siendo limpiada (garbage collected)
+The connection was not closed by the application and is garbage collected [90018-232]
+	at org.h2.message.DbException.get(DbException.java:223)
+	at org.h2.message.DbException.get(DbException.java:199)
+	at org.h2.message.DbException.get(DbException.java:188)
+	at org.h2.jdbc.JdbcConnection.closeOld(JdbcConnection.java:217)
+	at org.h2.jdbc.JdbcConnection.<init>(JdbcConnection.java:134)
+	at org.h2.Driver.connect(Driver.java:59)
+	at com.zaxxer.hikari.util.DriverDataSource.getConnection(DriverDataSource.java:144)
+	at com.zaxxer.hikari.pool.PoolBase.newConnection(PoolBase.java:370)
+	at com.zaxxer.hikari.pool.PoolBase.newPoolEntry(PoolBase.java:207)
+	at com.zaxxer.hikari.pool.HikariPool.createPoolEntry(HikariPool.java:488)
+	at com.zaxxer.hikari.pool.HikariPool$PoolEntryCreator.call(HikariPool.java:752)
+	at com.zaxxer.hikari.pool.HikariPool$PoolEntryCreator.call(HikariPool.java:731)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:840)
+Caused by: org.h2.jdbc.JdbcSQLNonTransientConnectionException: La conexión no fue cerrada por la aplicación y esta siendo limpiada (garbage collected)
+The connection was not closed by the application and is garbage collected [90018-232]
+	at org.h2.message.DbException.getJdbcSQLException(DbException.java:690)
+	at org.h2.message.DbException.getJdbcSQLException(DbException.java:489)
+	... 16 more
+2025-12-26 16:21:13.600301-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 16:53:40.506043-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 16:57:36.003054-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 17:16:45.549284-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 17:41:33.553601-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 17:42:31.429084-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 17:43:36.152748-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 17:44:24.490131-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 17:44:36.064068-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 17:44:52.737221-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 17:46:01.978892-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 17:46:11.635352-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 17:47:46.424125-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 17:49:44.016111-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 17:50:03.171456-03:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Valor demasiado largo para la columna "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"
+Value too long for column "IMAGEN CHARACTER VARYING(255)": "'https://scontent-scl2-1.xx.fbcdn.net/v/t1.6435-9/78167441_1316997891841734_2833... (399)"; SQL statement:
+INSERT INTO "PUBLIC"."EVENTOS_COPY_3_0"("ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT") OVERRIDING SYSTEM VALUE SELECT "ID", "COLUMNAS", "DESCRIPCION", "FECHA", "FILAS", "IMAGEN", "PRECIO", "TITULO", "UPDATED_AT" FROM "PUBLIC"."EVENTOS" [22001-232]
+2025-12-26 18:23:06.785030-03:00 jdbc[24]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Error de Sintaxis en sentencia SQL "SELECT * [*]VENTAS"
+Syntax error in SQL statement "SELECT * [*]VENTAS"; SQL statement:
+SELECT * VENTAS [42000-232]

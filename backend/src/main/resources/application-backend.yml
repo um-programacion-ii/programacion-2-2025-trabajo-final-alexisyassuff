@@ -5,6 +5,14 @@ spring:
     database: 0
     ssl: false
 
+  kafka:
+    bootstrap-servers: 192.168.194.250:9092
+    consumer:
+      group-id: backend-eventos-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
 server:
   port: 8080
 
@@ -14,3 +22,7 @@ catedra:
 
 proxy:
   base-url: "http://localhost:8081"
+
+kafka:
+  topic:
+    eventos: "eventos-actualizacion" # Tópico para cambios en metadatos del evento (NO asientos)

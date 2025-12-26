@@ -48,8 +48,6 @@ class EventDetailActivity : ComponentActivity() {
 }
 
 
-
-
 class EventDetailViewModel(private val eventId: Long) : ViewModel() {
     var seats by mutableStateOf<List<Seat>>(emptyList())
         private set
@@ -58,15 +56,7 @@ class EventDetailViewModel(private val eventId: Long) : ViewModel() {
     var error by mutableStateOf<String?>(null)
         private set
     
-    // dentro de la clase EventDetailViewModel { ... } pega este método
-    suspend fun getSeatState(eventId: Long, seatId: String): Map<String, Any?> {
-        return withContext(Dispatchers.IO) {
-            // Llamamos al ApiClient que ya tenés (ajusta el package si tu ApiClient está en otro paquete)
-            com.cine.shared.ApiClient.getSeatState(eventId, seatId)
-        }
-    }
-    
-    // Map para rastrear timestamps de bloqueos: seatId -> timestamp en millis
+
     var seatLockTimestamps by mutableStateOf<Map<String, Long>>(emptyMap())
         private set
 
@@ -157,7 +147,6 @@ class EventDetailViewModel(private val eventId: Long) : ViewModel() {
     }
 }
 
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
@@ -169,25 +158,20 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
     var performingAction by remember { mutableStateOf(false) }
     var showMultiDialog by remember { mutableStateOf(false) }
 
-    // Nuevas variables para datos del comprador
     var showBuyerDialog by remember { mutableStateOf(false) }
     var buyerPersona by remember { mutableStateOf("") }
 
-    // Temporizador para actualizar los tiempos restantes cada segundo
     LaunchedEffect(vm.seatLockTimestamps) {
         while (vm.seatLockTimestamps.isNotEmpty()) {
-            delay(1000) // Actualizar cada segundo
+            delay(1000)
             val currentTime = System.currentTimeMillis()
             val expiredSeats = vm.seatLockTimestamps.filter { (_, timestamp) ->
-                (currentTime - timestamp) >= 300_000 // 5 minutos = 300,000 ms
+                (currentTime - timestamp) >= 300_000 
             }
 
-            // Remover timestamps de asientos expirados
             expiredSeats.keys.forEach { seatId ->
                 vm.removeSeatTimestamp(seatId)
             }
-
-            // Si hay asientos que expiraron, recargar la vista
             if (expiredSeats.isNotEmpty()) {
                 vm.loadSeats()
             }
@@ -241,7 +225,7 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                 }
                 else -> {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(6),
+                        columns = GridCells.Fixed(8),
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(8.dp),
@@ -268,28 +252,19 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                                             } else if (selectedSeats.size < 4) {
                                                 selectedSeats + seat // Seleccionar (máximo 4)
                                             } else {
-                                                selectedSeats // No permitir más de 4
+                                                selectedSeats
                                             }
                                         }
                                         // Para otros estados (vendido, bloqueado por otro), mostrar info
                                         else -> {
                                             scope.launch {
                                                 val msg = when {
-                                                    status.contains("VEND") -> {
-                                                        // Pedir detalle puntual del asiento al ViewModel (suspend)
-                                                        try {
-                                                            val seatState = vm.getSeatState(eventId, seat.seatId) // suspend function in VM
-                                                            val comprador = seatState["comprador"] as? Map<*, *>
-                                                            val nombre = comprador?.get("persona") as? String ?: "desconocido"
-                                                            val fecha = comprador?.get("fechaVenta") as? String ?: ""
-                                                            "Asiento vendido a $nombre ${if (fecha.isNotBlank()) "el $fecha" else ""}"
-                                                        } catch (ex: Exception) {
-                                                            // Fallback si no se pudo obtener detalle
-                                                            "Asiento vendido (datos no disponibles)"
-                                                        }
-                                                    }
-                                                    status.contains("BLOQ") -> "Asiento bloqueado por otro usuario: ${seat.holder ?: "desconocido"}"
-                                                    else -> "Asiento no disponible: $status"
+                                                    status.contains("VEND") ->
+                                                        "Asiento vendido (datos no disponibles)"
+                                                    status.contains("BLOQ") ->
+                                                        "Asiento bloqueado por otro usuario: ${seat.holder ?: "desconocido"}"
+                                                    else ->
+                                                        "Asiento no disponible: $status"
                                                 }
                                                 snackbarHostState.showSnackbar(msg)
                                             }
@@ -302,7 +277,7 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                 }
             }
 
-            // Botón flotante para mostrar opciones cuando hay asientos seleccionados
+            // Botón flotante para multiacción
             if (selectedSeats.isNotEmpty()) {
                 FloatingActionButton(
                     onClick = { showMultiDialog = true },
@@ -314,7 +289,7 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                 }
             }
 
-            // Dialog para acciones múltiples
+            // Dialogo para seleccion múltiple (bloqueo y venta)
             if (showMultiDialog && selectedSeats.isNotEmpty()) {
                 val libreSeats = selectedSeats.filter {
                     val status = it.status?.uppercase()?.trim() ?: ""
@@ -328,9 +303,7 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
 
                 AlertDialog(
                     onDismissRequest = {
-                        if (!performingAction) {
-                            showMultiDialog = false
-                        }
+                        if (!performingAction) showMultiDialog = false
                     },
                     title = {
                         Text(
@@ -361,7 +334,6 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                     confirmButton = {
                         if (!performingAction) {
                             Column {
-                                // Mostrar bloquear solo si hay asientos libres
                                 if (libreSeats.isNotEmpty()) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         TextButton(onClick = {
@@ -369,16 +341,15 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                                             scope.launch {
                                                 try {
                                                     val seatIds = libreSeats.map { it.seatId }
-                                                    ApiClient.blockMultipleSeats(eventId, seatIds)
-
-                                                    // Marcar timestamps de bloqueo
-                                                    seatIds.forEach { seatId ->
-                                                        vm.markSeatAsBlocked(seatId)
+                                                    if (seatIds.isNotEmpty()) {
+                                                        ApiClient.blockSeats(eventId, seatIds)
+                                                        seatIds.forEach { seatId ->
+                                                            vm.markSeatAsBlocked(seatId)
+                                                        }
+                                                        snackbarHostState.showSnackbar("${seatIds.size} asientos bloqueados")
+                                                        vm.loadSeats()
+                                                        selectedSeats = emptySet()
                                                     }
-
-                                                    snackbarHostState.showSnackbar("${seatIds.size} asientos bloqueados")
-                                                    vm.loadSeats()
-                                                    selectedSeats = emptySet()
                                                     showMultiDialog = false
                                                 } catch (ex: Exception) {
                                                     snackbarHostState.showSnackbar("Error al bloquear: ${ex.message}")
@@ -389,37 +360,6 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                                         }) { Text("Bloquear libres (${libreSeats.size})") }
                                     }
                                 }
-
-                                // Mostrar desbloquear solo si hay asientos bloqueados por mí
-                                if (myBlockedSeats.isNotEmpty()) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        TextButton(onClick = {
-                                            performingAction = true
-                                            scope.launch {
-                                                try {
-                                                    val seatIds = myBlockedSeats.map { it.seatId }
-                                                    ApiClient.unblockMultipleSeats(eventId, seatIds)
-
-                                                    // Remover timestamps de desbloqueo
-                                                    seatIds.forEach { seatId ->
-                                                        vm.removeSeatTimestamp(seatId)
-                                                    }
-
-                                                    snackbarHostState.showSnackbar("${seatIds.size} asientos desbloqueados")
-                                                    vm.loadSeats()
-                                                    selectedSeats = emptySet()
-                                                    showMultiDialog = false
-                                                } catch (ex: Exception) {
-                                                    snackbarHostState.showSnackbar("Error al desbloquear: ${ex.message}")
-                                                } finally {
-                                                    performingAction = false
-                                                }
-                                            }
-                                        }) { Text("Desbloquear míos (${myBlockedSeats.size})") }
-                                    }
-                                }
-
-                                // Botón de vender solo si hay asientos bloqueados por mí
                                 if (myBlockedSeats.isNotEmpty()) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         TextButton(onClick = {
@@ -433,18 +373,14 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                     },
                     dismissButton = {
                         TextButton(onClick = {
-                            if (!performingAction) {
-                                showMultiDialog = false
-                            }
-                        }) {
-                            Text("Cancelar")
-                        }
+                            if (!performingAction) showMultiDialog = false
+                        }) { Text("Cancelar") }
                     }
                 )
             }
         }
 
-        // Diálogo para capturar datos del comprador
+        // Diálogo para datos del comprador y venta
         if (showBuyerDialog) {
             AlertDialog(
                 onDismissRequest = {
@@ -457,7 +393,6 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text("Complete los datos para finalizar la venta:")
-
                         OutlinedTextField(
                             value = buyerPersona,
                             onValueChange = { buyerPersona = it },
@@ -467,14 +402,11 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                             enabled = !performingAction,
                             singleLine = true
                         )
-
                         val mySession = SessionManager.getToken()
-                        // Mostrar solo los asientos SELECCIONADOS que están bloqueados por mí
                         val selectedBlockedSeats = selectedSeats.filter { seat ->
                             seat.status?.uppercase()?.contains("BLOQ") == true &&
                                     seat.holder == mySession
                         }
-
                         if (selectedBlockedSeats.isNotEmpty()) {
                             Text(
                                 "Asientos a vender: ${selectedBlockedSeats.map { it.seatId }.joinToString(", ")}",
@@ -492,21 +424,19 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                                 scope.launch {
                                     try {
                                         val mySession = SessionManager.getToken()
-                                        // CORRECCIÓN: Usar solo los asientos SELECCIONADOS que están bloqueados por mí
                                         val selectedBlockedSeats = selectedSeats.filter { seat ->
                                             seat.status?.uppercase()?.contains("BLOQ") == true &&
                                                     seat.holder == mySession
                                         }
                                         val seatIds = selectedBlockedSeats.map { it.seatId }
-
-                                        // Llamar al nuevo método con datos del comprador
-                                        ApiClient.purchaseMultipleSeatsWithBuyer(eventId, seatIds, buyerPersona)
-
-                                        snackbarHostState.showSnackbar("${seatIds.size} asientos vendidos a $buyerPersona")
-                                        vm.loadSeats()
-                                        selectedSeats = emptySet()
-                                        showBuyerDialog = false
-                                        buyerPersona = ""
+                                        if (seatIds.isNotEmpty()) {
+                                            ApiClient.purchaseSeatsWithBuyer(eventId, seatIds, buyerPersona)
+                                            snackbarHostState.showSnackbar("${seatIds.size} asientos vendidos a $buyerPersona")
+                                            vm.loadSeats()
+                                            selectedSeats = emptySet()
+                                            showBuyerDialog = false
+                                            buyerPersona = ""
+                                        }
                                     } catch (ex: Exception) {
                                         snackbarHostState.showSnackbar("Error al vender: ${ex.message}")
                                     } finally {
@@ -530,14 +460,13 @@ fun EventDetailScreen(vm: EventDetailViewModel, eventId: Long) {
                             showBuyerDialog = false
                             buyerPersona = ""
                         }
-                    }) {
-                        Text("Cancelar")
-                    }
+                    }) { Text("Cancelar") }
                 }
             )
         }
     }
 }
+
 
 @Composable
 private fun SeatItem(seat: Seat, isSelected: Boolean = false, lockTimestamp: Long? = null, onClick: () -> Unit) {
@@ -612,7 +541,7 @@ private fun seatStatusColor(status: String?): Color {
     val s = status?.uppercase()?.trim() ?: ""
     return when {
         s.contains("LIBRE") || s.contains("AVAILABLE") || s.contains("FREE") -> Color(0xFF81C784) // verde
-        s.contains("VEND") || s.contains("SOLD") || s.contains("VENDIDO") -> Color(0xFFF06292) // rosa/rojo
+        s.contains("VEND") || s.contains("SOLD") || s.contains("VENDIDO") -> Color(0xFFF06292) // rojo
         s.contains("BLOQ") || s.contains("RESERV") || s.contains("BLOCK") -> Color(0xFFFFF176) // amarillo
         else -> Color(0xFF90A4AE) // gris por defecto
     }

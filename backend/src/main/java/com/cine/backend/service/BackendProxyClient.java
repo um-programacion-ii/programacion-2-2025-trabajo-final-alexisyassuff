@@ -1,21 +1,13 @@
 package com.cine.backend.service;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-
 import java.util.Map;
 
-/**
- * Cliente simple que llama al proxy para obtener:
- * - datos de la cátedra: GET {proxyBase}/eventos/{id}
- * - estado desde Redis (vía proxy): GET {proxyBase}/internal/kafka/events?eventoId={id}
- *
- * La base URL se inyecta desde application.yml con la propiedad proxy.base-url.
- */
+
 @Service
 public class BackendProxyClient {
 

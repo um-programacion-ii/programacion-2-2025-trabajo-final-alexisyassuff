@@ -173,11 +173,6 @@ private fun EventCard(e: EventSummary, onClick: () -> Unit) {
                 text = "Precio: $${String.format("%.2f", e.price)}",
                 style = MaterialTheme.typography.bodySmall
             )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Asientos totales: ${e.availableSeats}",
-                style = MaterialTheme.typography.bodySmall
-            )
         }
     }
 }
